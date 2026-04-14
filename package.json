@@ -4,7 +4,7 @@
   "description": "Universal AI Learning Platform",
   "main": "backend/server.js",
   "scripts": {
-    "start": "node backend/server.js",
+    "start": "node server.js",
     "install-deps": "cd backend && npm install"
   },
   "engines": {
