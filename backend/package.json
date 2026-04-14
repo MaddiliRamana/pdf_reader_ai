@@ -1,7 +1,7 @@
 {
   "name": "cognitive-curator-backend",
   "version": "1.0.0",
-  "main": "server.js",
+  "main": "backend/server.js",
   "scripts": {
     "start": "node backend/server.js"
   },
@@ -27,5 +27,8 @@
     "socket.io": "^4.8.3",
     "tesseract.js": "^5.0.4",
     "twilio": "^5.13.1"
+  },
+  "engines": {
+    "node": ">=18.0.0"
   }
 }
