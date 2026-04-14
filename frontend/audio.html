@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/><meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Audio Analyzer — Cognitive Curator</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🧠</text></svg>"/>
+  <link rel="stylesheet" href="style.css"/>
+  <script src="jspdf.umd.min.js"></script>
+</head>
+<body>
+<header class="header">
+  <div class="header-left"><a href="/dashboard.html" class="btn btn-secondary btn-sm">← Dashboard</a></div>
+  <div class="header-center"><div class="logo">🎙️ Audio Analyzer</div><p class="tagline">Upload audio — Groq Whisper transcribes free, AI generates notes</p></div>
+  <div class="user-bar"><span class="user-greeting" id="ug"></span><button class="btn-logout" onclick="logout()">Logout</button></div>
+</header>
+
+<div style="max-width:1100px;margin:0 auto;padding:24px;display:grid;grid-template-columns:1fr 1fr;gap:24px">
+  <div>
+    <div class="card" style="margin-bottom:16px">
+      <h3 style="color:#a78bfa;margin-bottom:12px">🎙️ Upload Audio</h3>
+      <div class="upload-area" onclick="document.getElementById('audioInput').click()">
+        <div class="upload-icon">🎙️</div>
+        <p>Click to upload audio file</p>
+        <p style="font-size:0.78rem;color:var(--text-muted);margin-top:4px">Supports: MP3, MP4, WAV, M4A, OGG, WebM (max 25MB)</p>
+        <input type="file" id="audioInput" accept="audio/*,video/mp4" hidden onchange="handleAudio(this.files[0])"/>
+      </div>
+      <div id="audioStatus" class="status-msg hidden"></div>
+      <div id="audioPlayer" style="display:none;margin-top:12px">
+        <audio id="audioEl" controls style="width:100%;border-radius:8px"></audio>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3 style="color:#a78bfa;margin-bottom:12px">🛠️ AI Actions</h3>
+      <p style="font-size:0.82rem;color:var(--text-muted);margin-bottom:10px">First transcribe, then generate notes from transcript</p>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button class="btn btn-primary" id="btnTranscribe" onclick="transcribeAudio()" disabled>🎙️ Transcribe (Groq Whisper)</button>
+        <button class="btn btn-secondary" id="btnAudioNotes" onclick="processAudio('notes')" disabled>✨ Notes</button>
+        <button class="btn btn-secondary" id="btnAudioSummary" onclick="processAudio('summary')" disabled>📋 Summary</button>
+        <button class="btn btn-secondary" id="btnAudioPoints" onclick="processAudio('keypoints')" disabled>🎯 Key Points</button>
+        <button class="btn btn-secondary" id="btnAudioQuiz" onclick="processAudio('quiz')" disabled>🧪 Quiz</button>
+      </div>
+    </div>
+  </div>
+
+  <div>
+    <div class="card" style="margin-bottom:16px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+        <h3 style="color:#a78bfa">📝 Transcript</h3>
+        <button class="btn btn-secondary btn-sm" id="btnCopyTranscript" onclick="copyTranscript()" style="display:none">📋 Copy</button>
+      </div>
+      <div id="audioLoader" class="loader hidden"><div class="spinner"></div><span id="audioLoaderMsg">Transcribing with Groq Whisper...</span></div>
+      <div id="transcriptBox" style="min-height:150px;max-height:250px;overflow-y:auto;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:14px;font-size:0.88rem;line-height:1.7;color:var(--text)">
+        <p style="color:var(--text-muted);font-style:italic">Transcript will appear here after transcription...</p>
+      </div>
+    </div>
+
+    <div class="card">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+        <h3 style="color:#a78bfa" id="audioOutputTitle">📄 AI Output</h3>
+        <button class="btn btn-secondary btn-sm" id="btnDlAudio" onclick="dlAudioOutput()" style="display:none">⬇ Download</button>
+      </div>
+      <div id="audioOutput" style="min-height:150px;max-height:280px;overflow-y:auto;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:14px;font-size:0.88rem;line-height:1.7;white-space:pre-wrap;color:var(--text)">
+        <p style="color:var(--text-muted);font-style:italic">AI analysis will appear here...</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  const BASE='http://localhost:3000';
+  const token=localStorage.getItem('cc_token');
+  if(!token)window.location.href='/login.html';
+  document.getElementById('ug').textContent='👤 '+(localStorage.getItem('cc_user')||'');
+  function logout(){localStorage.clear();window.location.href='/login.html';}
+
+  let audioFile=null, transcript='', lastOut='';
+
+  function handleAudio(file) {
+    if(!file)return;
+    audioFile=file;
+    const url=URL.createObjectURL(file);
+    document.getElementById('audioEl').src=url;
+    document.getElementById('audioPlayer').style.display='block';
+    document.getElementById('audioStatus').textContent='✅ '+file.name+' ('+Math.round(file.size/1024)+'KB) ready';
+    document.getElementById('audioStatus').className='status-msg status-success';
+    document.getElementById('audioStatus').classList.remove('hidden');
+    document.getElementById('btnTranscribe').disabled=false;
+  }
+
+  async function transcribeAudio() {
+    if(!audioFile){alert('Upload audio first.');return;}
+    const loader=document.getElementById('audioLoader');
+    const box=document.getElementById('transcriptBox');
+    document.getElementById('audioLoaderMsg').textContent='Transcribing with Groq Whisper (free)...';
+    loader.classList.remove('hidden');
+    box.textContent='';
+
+    const fd=new FormData(); fd.append('audio',audioFile);
+    try {
+      const res=await fetch(BASE+'/api/process-audio',{method:'POST',headers:{'Authorization':'Bearer '+token},body:fd});
+      const data=await res.json();
+      if(data.error)throw new Error(data.error);
+      transcript=data.transcript;
+      box.textContent=transcript;
+      document.getElementById('btnCopyTranscript').style.display='inline-flex';
+      ['btnAudioNotes','btnAudioSummary','btnAudioPoints','btnAudioQuiz'].forEach(id=>document.getElementById(id).disabled=false);
+      document.getElementById('audioStatus').textContent='✅ Transcribed! ('+data.chars+' characters)';
+    } catch(e){
+      box.textContent='Error: '+e.message;
+      document.getElementById('audioStatus').textContent='❌ '+e.message;
+      document.getElementById('audioStatus').className='status-msg status-error';
+    }
+    loader.classList.add('hidden');
+  }
+
+  async function processAudio(mode) {
+    if(!transcript){alert('Transcribe audio first.');return;}
+    const loader=document.getElementById('audioLoader');
+    document.getElementById('audioLoaderMsg').textContent='Generating with Groq LLaMA3...';
+    loader.classList.remove('hidden');
+    document.getElementById('audioOutput').textContent='';
+    try {
+      const res=await fetch(BASE+'/api/text-process',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+token},body:JSON.stringify({text:transcript,mode})});
+      const data=await res.json();
+      if(data.error)throw new Error(data.error);
+      lastOut=data.result;
+      document.getElementById('audioOutput').textContent=data.result;
+      document.getElementById('btnDlAudio').style.display='inline-flex';
+    } catch(e){document.getElementById('audioOutput').textContent='Error: '+e.message;}
+    loader.classList.add('hidden');
+  }
+
+  function copyTranscript(){navigator.clipboard.writeText(transcript);document.getElementById('btnCopyTranscript').textContent='✅ Copied!';setTimeout(()=>document.getElementById('btnCopyTranscript').textContent='📋 Copy',2000);}
+
+  function dlAudioOutput(){
+    if(!lastOut)return;
+    const {jsPDF}=window.jspdf; const doc=new jsPDF();
+    const lines=doc.splitTextToSize(lastOut,180); let y=20;
+    lines.forEach(l=>{if(y>275){doc.addPage();y=20;}doc.text(l,15,y);y+=6;});
+    doc.save('audio-analysis.pdf');
+  }
+</script>
+</body>
+</html>

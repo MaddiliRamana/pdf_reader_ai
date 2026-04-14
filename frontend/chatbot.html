@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/><meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>AI Chat Assistant — Cognitive Curator</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🧠</text></svg>"/>
+  <link rel="stylesheet" href="style.css"/>
+</head>
+<body>
+<header class="header">
+  <div class="header-left"><a href="/dashboard.html" class="btn btn-secondary btn-sm">← Dashboard</a></div>
+  <div class="header-center"><div class="logo">🤖 AI Chat Assistant</div><p class="tagline">ChatGPT-like multi-turn conversation powered by GPT-4o-mini</p></div>
+  <div class="user-bar"><span class="user-greeting" id="ug"></span><button class="btn-logout" onclick="logout()">Logout</button></div>
+</header>
+
+<div style="max-width:900px;margin:0 auto;padding:24px;height:calc(100vh - 100px);display:flex;flex-direction:column">
+  <!-- Mode selector -->
+  <div style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap">
+    <span style="font-size:0.82rem;color:var(--text-muted);align-self:center">Mode:</span>
+    <button class="btn btn-sm btn-primary" id="modeGeneral" onclick="setMode('general')">💬 General</button>
+    <button class="btn btn-sm btn-secondary" id="modeStudy" onclick="setMode('study')">📚 Study Assistant</button>
+    <button class="btn btn-sm btn-secondary" id="modeCoding" onclick="setMode('coding')">💻 Coding Mentor</button>
+    <button class="btn btn-sm btn-secondary" id="modeCreative" onclick="setMode('creative')">✍️ Creative Writer</button>
+    <button class="btn btn-sm btn-secondary" style="margin-left:auto" onclick="clearChat()">🗑️ Clear Chat</button>
+  </div>
+
+  <!-- Messages -->
+  <div id="chatMessages" style="flex:1;overflow-y:auto;background:var(--card);border:1px solid var(--border);border-radius:12px;padding:20px;display:flex;flex-direction:column;gap:12px;margin-bottom:16px">
+    <div style="text-align:center;color:var(--text-muted);font-size:0.88rem;padding:20px">
+      🤖 Hello! I'm your AI assistant. Ask me anything — I can help with studying, coding, writing, or any topic.
+    </div>
+  </div>
+
+  <!-- Input -->
+  <div style="display:flex;gap:10px">
+    <textarea id="chatInput" style="flex:1;background:var(--card);color:var(--text);border:1px solid var(--border);border-radius:10px;padding:12px 16px;font-size:0.95rem;resize:none;height:52px;outline:none;font-family:inherit" placeholder="Type your message... (Enter to send, Shift+Enter for new line)" onkeydown="handleKey(event)"></textarea>
+    <button class="btn btn-primary" style="padding:12px 20px;font-size:1.1rem" onclick="sendMessage()">➤</button>
+  </div>
+</div>
+
+<script>
+  const BASE='http://localhost:3000';
+  const token=localStorage.getItem('cc_token');
+  if(!token)window.location.href='/login.html';
+  document.getElementById('ug').textContent='👤 '+(localStorage.getItem('cc_user')||'');
+  function logout(){localStorage.clear();window.location.href='/login.html';}
+
+  let mode='general';
+  let history=[];
+
+  const systemPrompts={
+    general:'You are a helpful, friendly AI assistant. Answer clearly and concisely.',
+    study:'You are an expert study assistant. Help students understand concepts, create study plans, explain topics clearly with examples.',
+    coding:'You are an expert coding mentor. Help with code, explain concepts, debug issues, suggest best practices. Format code in code blocks.',
+    creative:'You are a creative writing assistant. Help with stories, essays, poems, and creative content.'
+  };
+
+  function setMode(m) {
+    mode=m; history=[];
+    ['General','Study','Coding','Creative'].forEach(n=>{
+      const btn=document.getElementById('mode'+n);
+      if(btn) btn.className='btn btn-sm '+(n.toLowerCase()===m?'btn-primary':'btn-secondary');
+    });
+    document.getElementById('chatMessages').innerHTML=`<div style="text-align:center;color:var(--text-muted);font-size:0.88rem;padding:20px">Mode switched to ${m}. Chat history cleared.</div>`;
+  }
+
+  function handleKey(e) {
+    if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();sendMessage();}
+  }
+
+  async function sendMessage() {
+    const input=document.getElementById('chatInput');
+    const msg=input.value.trim();
+    if(!msg)return;
+    input.value='';
+
+    const box=document.getElementById('chatMessages');
+    box.innerHTML+=`<div style="background:rgba(108,99,255,0.15);border-radius:10px;padding:12px 16px;align-self:flex-end;max-width:80%;font-size:0.92rem">${msg.replace(/\n/g,'<br>')}</div>`;
+
+    history.push({role:'user',content:msg});
+
+    const thinkId='t'+Date.now();
+    box.innerHTML+=`<div id="${thinkId}" style="background:var(--card2);border-radius:10px;padding:12px 16px;max-width:80%;font-size:0.92rem;color:var(--text-muted)">🤖 Thinking...</div>`;
+    box.scrollTop=box.scrollHeight;
+
+    try {
+      const res=await fetch(BASE+'/api/chat',{
+        method:'POST',
+        headers:{'Content-Type':'application/json','Authorization':'Bearer '+token},
+        body:JSON.stringify({messages:history,systemPrompt:systemPrompts[mode]})
+      });
+      const data=await res.json();
+      if(data.error)throw new Error(data.error);
+      const reply=data.reply;
+      history.push({role:'assistant',content:reply});
+      // Format code blocks
+      const formatted=reply.replace(/```(\w*)\n?([\s\S]*?)```/g,'<pre style="background:#0f0f1a;border:1px solid var(--border);border-radius:6px;padding:12px;overflow-x:auto;font-size:0.82rem"><code>$2</code></pre>').replace(/\n/g,'<br>');
+      document.getElementById(thinkId).outerHTML=`<div style="background:var(--card2);border-radius:10px;padding:12px 16px;max-width:85%;font-size:0.92rem;line-height:1.6">${formatted}</div>`;
+    } catch(e){
+      document.getElementById(thinkId).outerHTML=`<div style="color:#f87171;font-size:0.88rem">❌ ${e.message}</div>`;
+    }
+    box.scrollTop=box.scrollHeight;
+  }
+
+  function clearChat(){history=[];document.getElementById('chatMessages').innerHTML='<div style="text-align:center;color:var(--text-muted);font-size:0.88rem;padding:20px">Chat cleared. Start a new conversation!</div>';}
+</script>
+</body>
+</html>

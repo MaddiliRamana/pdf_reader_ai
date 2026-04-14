@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/><meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Document Reader — Cognitive Curator</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🧠</text></svg>"/>
+  <link rel="stylesheet" href="style.css"/>
+  <script src="jspdf.umd.min.js"></script>
+</head>
+<body>
+<header class="header">
+  <div class="header-left"><a href="/dashboard.html" class="btn btn-secondary btn-sm">← Dashboard</a></div>
+  <div class="header-center"><div class="logo">📃 Document Reader</div><p class="tagline">Upload .docx Word documents — AI extracts and analyzes</p></div>
+  <div class="user-bar"><span class="user-greeting" id="ug"></span><button class="btn-logout" onclick="logout()">Logout</button></div>
+</header>
+
+<div style="max-width:1100px;margin:0 auto;padding:24px;display:grid;grid-template-columns:1fr 1fr;gap:24px">
+  <div>
+    <div class="card" style="margin-bottom:16px">
+      <h3 style="color:#a78bfa;margin-bottom:12px">📥 Upload Document</h3>
+      <div class="upload-area" id="dropArea" onclick="document.getElementById('docInput').click()" style="margin-bottom:12px">
+        <div class="upload-icon">📃</div>
+        <p>Click or drag & drop your .docx file here</p>
+        <input type="file" id="docInput" accept=".docx" hidden onchange="handleDoc(this.files[0])"/>
+      </div>
+      <div id="docStatus" class="status-msg hidden"></div>
+      <div id="extractedPreview" style="display:none;margin-top:12px">
+        <p style="color:#4ade80;font-size:0.85rem;margin-bottom:8px">✅ Document extracted successfully</p>
+        <div id="previewText" style="max-height:150px;overflow-y:auto;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:12px;font-size:0.82rem;color:var(--text-muted)"></div>
+      </div>
+    </div>
+    <div class="card">
+      <h3 style="color:#a78bfa;margin-bottom:12px">🛠️ AI Actions</h3>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button class="btn btn-primary" onclick="processDoc('notes')">✨ Notes</button>
+        <button class="btn btn-secondary" onclick="processDoc('summary')">📋 Summary</button>
+        <button class="btn btn-secondary" onclick="processDoc('keypoints')">🎯 Key Points</button>
+        <button class="btn btn-secondary" onclick="processDoc('quiz')">🧪 Quiz</button>
+        <button class="btn btn-secondary" onclick="processDoc('simple')">🧒 Simplify</button>
+        <button class="btn btn-secondary" onclick="processDoc('advanced')">🎓 Advanced</button>
+      </div>
+    </div>
+  </div>
+  <div class="card">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+      <h3 style="color:#a78bfa" id="docOutputTitle">📄 Output</h3>
+      <button class="btn btn-secondary btn-sm" id="btnDlDoc" onclick="dlDoc()" style="display:none">⬇ Download</button>
+    </div>
+    <div id="docLoader" class="loader hidden"><div class="spinner"></div><span>Processing...</span></div>
+    <div id="docOutput" style="min-height:300px;max-height:550px;overflow-y:auto;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:16px;font-size:0.9rem;line-height:1.7;white-space:pre-wrap;color:var(--text)">
+      <p style="color:var(--text-muted);font-style:italic">Upload a document and select an action...</p>
+    </div>
+  </div>
+</div>
+
+<script>
+  const BASE='http://localhost:3000';
+  const token=localStorage.getItem('cc_token');
+  if(!token)window.location.href='/login.html';
+  document.getElementById('ug').textContent='👤 '+(localStorage.getItem('cc_user')||'');
+  function logout(){localStorage.clear();window.location.href='/login.html';}
+  let docText='', lastOut='';
+
+  async function handleDoc(file) {
+    if(!file)return;
+    const fd=new FormData(); fd.append('doc',file);
+    document.getElementById('docStatus').textContent='Extracting text...';
+    document.getElementById('docStatus').className='status-msg status-success';
+    document.getElementById('docStatus').classList.remove('hidden');
+    try {
+      const res=await fetch(BASE+'/api/process-doc',{method:'POST',headers:{'Authorization':'Bearer '+token},body:fd});
+      const data=await res.json();
+      if(data.error)throw new Error(data.error);
+      docText=data.text;
+      document.getElementById('docStatus').textContent='✅ '+file.name+' extracted ('+data.chars+' chars)';
+      document.getElementById('previewText').textContent=docText.slice(0,500)+'...';
+      document.getElementById('extractedPreview').style.display='block';
+    } catch(e){document.getElementById('docStatus').textContent='Error: '+e.message;document.getElementById('docStatus').className='status-msg status-error';}
+  }
+
+  async function processDoc(mode) {
+    if(!docText){alert('Upload a document first.');return;}
+    document.getElementById('docLoader').classList.remove('hidden');
+    document.getElementById('docOutput').textContent='';
+    try {
+      const res=await fetch(BASE+'/api/text-process',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+token},body:JSON.stringify({text:docText,mode})});
+      const data=await res.json();
+      if(data.error)throw new Error(data.error);
+      lastOut=data.result;
+      document.getElementById('docOutput').textContent=data.result;
+      document.getElementById('btnDlDoc').style.display='inline-flex';
+    } catch(e){document.getElementById('docOutput').textContent='Error: '+e.message;}
+    finally{document.getElementById('docLoader').classList.add('hidden');}
+  }
+
+  function dlDoc(){
+    if(!lastOut)return;
+    const {jsPDF}=window.jspdf; const doc=new jsPDF();
+    const lines=doc.splitTextToSize(lastOut,180); let y=20;
+    lines.forEach(l=>{if(y>275){doc.addPage();y=20;}doc.text(l,15,y);y+=6;});
+    doc.save('document-analysis.pdf');
+  }
+
+  // Drag & drop
+  const da=document.getElementById('dropArea');
+  da.addEventListener('dragover',e=>{e.preventDefault();da.style.background='rgba(108,99,255,0.1)';});
+  da.addEventListener('dragleave',()=>da.style.background='');
+  da.addEventListener('drop',e=>{e.preventDefault();da.style.background='';handleDoc(e.dataTransfer.files[0]);});
+</script>
+</body>
+</html>

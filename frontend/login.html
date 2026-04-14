@@ -1,0 +1,356 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Cognitive Curator — Login</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🧠</text></svg>"/>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --primary: #6c63ff; --primary-dark: #5a52d5;
+      --bg: #0f0f1a; --bg2: #1a1a2e; --card: #1e1e3a; --card2: #252545;
+      --text: #e2e8f0; --muted: #94a3b8; --border: #2d2d5e;
+      --success: #22c55e; --danger: #ef4444;
+    }
+    body { font-family: 'Segoe UI', system-ui, sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 20px; }
+    .brand { text-align: center; margin-bottom: 32px; }
+    .brand-logo { font-size: 3rem; margin-bottom: 8px; }
+    .brand-name { font-size: 1.8rem; font-weight: 800; background: linear-gradient(135deg, #6c63ff, #a78bfa, #38bdf8); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; }
+    .brand-sub { color: var(--muted); font-size: 0.9rem; margin-top: 4px; }
+    .auth-card { background: var(--card); border: 1px solid var(--border); border-radius: 16px; padding: 36px; width: 100%; max-width: 420px; box-shadow: 0 8px 40px rgba(0,0,0,0.4); }
+    .tabs { display: flex; gap: 0; margin-bottom: 28px; background: var(--bg); border-radius: 10px; padding: 4px; }
+    .tab { flex: 1; padding: 10px; text-align: center; border-radius: 8px; cursor: pointer; font-weight: 600; font-size: 0.9rem; color: var(--muted); transition: all 0.2s; border: none; background: none; }
+    .tab.active { background: var(--primary); color: #fff; }
+    .form-section { display: none; }
+    .form-section.active { display: block; }
+    .form-group { margin-bottom: 16px; }
+    label { display: block; font-size: 0.82rem; color: var(--muted); margin-bottom: 6px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; }
+    input { width: 100%; background: var(--bg); color: var(--text); border: 1px solid var(--border); border-radius: 8px; padding: 11px 14px; font-size: 0.95rem; outline: none; transition: border-color 0.2s; }
+    input:focus { border-color: var(--primary); }
+    .btn { width: 100%; padding: 13px; border: none; border-radius: 10px; font-size: 1rem; font-weight: 700; cursor: pointer; transition: all 0.2s; margin-top: 4px; }
+    .btn-primary { background: linear-gradient(135deg, var(--primary), #a78bfa); color: #fff; }
+    .btn-primary:hover { opacity: 0.9; transform: translateY(-1px); }
+    .btn-secondary { background: var(--card2); color: var(--text); border: 1px solid var(--border); margin-top: 10px; }
+    .btn-secondary:hover { background: var(--border); }
+    .msg { padding: 10px 14px; border-radius: 8px; font-size: 0.88rem; margin-bottom: 14px; display: none; }
+    .msg.success { background: rgba(34,197,94,0.15); color: #4ade80; border: 1px solid var(--success); }
+    .msg.error   { background: rgba(239,68,68,0.15);  color: #f87171; border: 1px solid var(--danger); }
+    .msg.show { display: block; }
+    .divider { text-align: center; color: var(--muted); font-size: 0.8rem; margin: 16px 0; position: relative; }
+    .divider::before, .divider::after { content: ''; position: absolute; top: 50%; width: 42%; height: 1px; background: var(--border); }
+    .divider::before { left: 0; } .divider::after { right: 0; }
+    .forgot-link { text-align: right; margin-top: -8px; margin-bottom: 14px; }
+    .forgot-link a { color: var(--primary); font-size: 0.82rem; cursor: pointer; text-decoration: none; }
+    .forgot-link a:hover { text-decoration: underline; }
+    .otp-row { display: flex; gap: 8px; }
+    .otp-row input { flex: 1; }
+    .otp-row button { padding: 11px 14px; border: none; border-radius: 8px; background: var(--primary); color: #fff; font-weight: 600; cursor: pointer; white-space: nowrap; font-size: 0.85rem; }
+    .otp-row button:hover { background: var(--primary-dark); }
+    .phone-hint { font-size: 0.78rem; color: var(--muted); margin-top: 4px; }
+    .step { display: none; } .step.active { display: block; }
+    .otp-timer { font-size:0.85rem; font-weight:700; margin-top:8px; }
+    .otp-timer.active { color:#38bdf8; }
+    .otp-timer.expired { color:#ef4444; }
+  </style>
+</head>
+<body>
+
+<div class="brand">
+  <div class="brand-logo">🧠</div>
+  <div class="brand-name">Cognitive Curator</div>
+  <div class="brand-sub">AI-Powered Smart Reading Experience</div>
+</div>
+
+<div class="auth-card">
+  <div class="tabs">
+    <button class="tab active" onclick="switchTab('login')">Login</button>
+    <button class="tab" onclick="switchTab('register')">Register</button>
+    <button class="tab" onclick="switchTab('otp')">Login with OTP</button>
+  </div>
+
+  <!-- LOGIN -->
+  <div class="form-section active" id="tab-login">
+    <div class="msg" id="login-msg"></div>
+    <form onsubmit="event.preventDefault(); doLogin()">
+      <div class="form-group">
+        <label>Username</label>
+        <input type="text" id="login-username" placeholder="Enter your username" autocomplete="username" />
+      </div>
+      <div class="form-group">
+        <label>Password</label>
+        <input type="password" id="login-password" placeholder="Enter your password" autocomplete="current-password" />
+      </div>
+      <div class="forgot-link"><a onclick="switchTab('otp')">Forgot password? Login with OTP →</a></div>
+      <button type="submit" class="btn btn-primary">Login →</button>
+    </form>
+    <div class="divider">or</div>
+    <button class="btn btn-secondary" onclick="switchTab('register')">Create New Account</button>
+  </div>
+
+  <!-- REGISTER -->
+  <div class="form-section" id="tab-register">
+    <div class="msg" id="register-msg"></div>
+    <form onsubmit="event.preventDefault(); doRegister()">
+      <div class="form-group">
+        <label>Username</label>
+        <input type="text" id="reg-username" placeholder="Choose a username" autocomplete="username" />
+      </div>
+      <div class="form-group">
+        <label>Password</label>
+        <input type="password" id="reg-password" placeholder="Create a strong password" autocomplete="new-password" />
+      </div>
+      <div class="form-group">
+        <label>Confirm Password</label>
+        <input type="password" id="reg-confirm" placeholder="Repeat your password" autocomplete="new-password" />
+      </div>
+      <div class="form-group">
+        <label>Phone Number</label>
+        <input type="tel" id="reg-phone" placeholder="+91 9876543210" autocomplete="tel" />
+        <div class="phone-hint">Used to identify your account for OTP login</div>
+      </div>
+      <div class="form-group">
+        <label>Email Address</label>
+        <input type="email" id="reg-email" placeholder="your@email.com" autocomplete="email" />
+        <div class="phone-hint">OTP will be sent to this email when you login with OTP</div>
+      </div>
+      <button type="submit" class="btn btn-primary">Create Account →</button>
+    </form>
+    <div class="divider">or</div>
+    <button class="btn btn-secondary" onclick="switchTab('login')">Already have an account? Login</button>
+  </div>
+
+  <!-- LOGIN WITH OTP -->
+  <div class="form-section" id="tab-otp">
+    <div class="msg" id="otp-login-msg"></div>
+
+    <!-- Step 1: Enter email -->
+    <div class="step active" id="otp-step1">
+      <p style="color:var(--muted);font-size:0.88rem;margin-bottom:16px">
+        Enter your registered email. We'll send a 6-digit OTP to login without password.
+      </p>
+      <div class="form-group">
+        <label>Email Address</label>
+        <input type="email" id="otp-email" placeholder="your@email.com" autocomplete="email" />
+        <div class="phone-hint">Must be the email you registered with</div>
+      </div>
+      <button class="btn btn-primary" onclick="sendLoginOTP()">📧 Send OTP to Email →</button>
+    </div>
+
+    <!-- Step 2: Enter OTP -->
+    <div class="step" id="otp-step2">
+      <p style="color:var(--muted);font-size:0.88rem;margin-bottom:16px">
+        Check your email inbox for the OTP code.
+      </p>
+      <div class="form-group">
+        <label>OTP Code</label>
+        <div class="otp-row">
+          <input type="text" id="otp-code" placeholder="Enter 6-digit OTP" maxlength="6" autocomplete="one-time-code" />
+          <button type="button" id="otp-resend-btn" onclick="sendLoginOTP()" disabled>Resend</button>
+        </div>
+        <div class="phone-hint" id="otp-login-hint"></div>
+        <div id="otp-timer" class="otp-timer"></div>
+      </div>
+      <button class="btn btn-primary" onclick="verifyLoginOTP()">Login with OTP →</button>
+      <button class="btn btn-secondary" onclick="resetOTPStep()">← Back</button>
+    </div>
+  </div>
+
+</div>
+
+<script>
+  // Always use backend port 3000 — never use Live Server port
+  const BASE = 'http://localhost:3000';
+
+  function switchTab(tab) {
+    const tabs = ['login','register','otp'];
+    document.querySelectorAll('.tab').forEach((t, i) => {
+      t.classList.toggle('active', tabs[i] === tab);
+    });
+    document.querySelectorAll('.form-section').forEach(s => s.classList.remove('active'));
+    document.getElementById('tab-' + tab).classList.add('active');
+    clearMsgs();
+  }
+
+  function showMsg(id, text, type) {
+    const el = document.getElementById(id);
+    el.textContent = text;
+    el.className = 'msg ' + type + ' show';
+  }
+  function clearMsgs() {
+    document.querySelectorAll('.msg').forEach(m => m.classList.remove('show'));
+  }
+
+  async function doLogin() {
+    const username = document.getElementById('login-username').value.trim();
+    const password = document.getElementById('login-password').value;
+    if (!username || !password) return showMsg('login-msg', 'Please fill all fields', 'error');
+
+    try {
+      const res = await fetch(BASE + '/api/auth/login', {
+        method: 'POST', headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({ username, password })
+      });
+      const data = await res.json();
+      if (data.error) return showMsg('login-msg', data.error, 'error');
+      localStorage.setItem('cc_token', data.token);
+      localStorage.setItem('cc_user', data.username);
+      // Speak welcome immediately — user just clicked so audio is allowed
+      try {
+        const u = new SpeechSynthesisUtterance(`Welcome back, ${data.username}! You are successfully logged in. Please upload a PDF to get started.`);
+        u.rate = 0.95; u.pitch = 1.05;
+        window.speechSynthesis.speak(u);
+      } catch(_) {}
+      showMsg('login-msg', 'Login successful! Redirecting...', 'success');
+      setTimeout(() => window.location.href = 'http://localhost:3000/dashboard.html', 1200);
+    } catch { showMsg('login-msg', 'Connection error. Is the server running?', 'error'); }
+  }
+
+  async function doRegister() {
+    const username = document.getElementById('reg-username').value.trim();
+    const password = document.getElementById('reg-password').value;
+    const confirm  = document.getElementById('reg-confirm').value;
+    const phone    = document.getElementById('reg-phone').value.trim();
+    const email    = document.getElementById('reg-email').value.trim();
+
+    if (!username || !password || !phone || !email) return showMsg('register-msg', 'Please fill all fields', 'error');
+    if (password !== confirm) return showMsg('register-msg', 'Passwords do not match', 'error');
+    if (password.length < 6) return showMsg('register-msg', 'Password must be at least 6 characters', 'error');
+    if (!email.includes('@')) return showMsg('register-msg', 'Enter a valid email address', 'error');
+
+    try {
+      const res = await fetch(BASE + '/api/auth/register', {
+        method: 'POST', headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({ username, password, phone, email })
+      });
+      const data = await res.json();
+      if (data.error) return showMsg('register-msg', data.error, 'error');
+      showMsg('register-msg', 'Account created! Please login.', 'success');
+      setTimeout(() => switchTab('login'), 1500);
+    } catch { showMsg('register-msg', 'Connection error', 'error'); }
+  }
+
+  async function sendOTP() {
+    const phone = document.getElementById('forgot-phone').value.trim();
+    if (!phone) return showMsg('forgot-msg', 'Enter your phone number', 'error');
+
+    try {
+      const res = await fetch(BASE + '/api/auth/send-otp', {
+        method: 'POST', headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({ phone })
+      });
+      const data = await res.json();
+      if (data.error) return showMsg('forgot-msg', data.error, 'error');
+      showMsg('forgot-msg', 'OTP sent! Check server console (dev mode).', 'success');
+      document.getElementById('forgot-step1').classList.remove('active');
+      document.getElementById('forgot-step2').classList.add('active');
+      if (data.code) {
+        document.getElementById('otp-hint').textContent = '🔑 Dev mode OTP: ' + data.code;
+      }
+    } catch { showMsg('forgot-msg', 'Connection error', 'error'); }
+  }
+
+  async function resetPassword() {
+    const phone    = document.getElementById('forgot-phone').value.trim();
+    const code     = document.getElementById('forgot-otp').value.trim();
+    const newpass  = document.getElementById('forgot-newpass').value;
+    const confirm  = document.getElementById('forgot-confirmpass').value;
+
+    if (!code || !newpass) return showMsg('forgot-msg', 'Fill all fields', 'error');
+    if (newpass !== confirm) return showMsg('forgot-msg', 'Passwords do not match', 'error');
+    if (newpass.length < 6) return showMsg('forgot-msg', 'Password must be at least 6 characters', 'error');
+
+    try {
+      const res = await fetch(BASE + '/api/auth/reset-password', {
+        method: 'POST', headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({ phone, code, newPassword: newpass })
+      });
+      const data = await res.json();
+      if (data.error) return showMsg('forgot-msg', data.error, 'error');
+      showMsg('forgot-msg', 'Password reset! Please login.', 'success');
+      setTimeout(() => { switchTab('login'); document.getElementById('forgot-step1').classList.add('active'); document.getElementById('forgot-step2').classList.remove('active'); }, 1800);
+    } catch { showMsg('forgot-msg', 'Connection error', 'error'); }
+  }
+
+  let otpTimerInterval = null;
+
+  function startOTPTimer(timerElId, resendBtnId, seconds = 120) {
+    const timerEl = document.getElementById(timerElId);
+    const resendBtn = document.getElementById(resendBtnId);
+    if (resendBtn) resendBtn.disabled = true;
+    clearInterval(otpTimerInterval);
+    let remaining = seconds;
+
+    function update() {
+      const m = Math.floor(remaining / 60);
+      const s = remaining % 60;
+      timerEl.textContent = `⏱ OTP expires in ${m}:${s.toString().padStart(2,'0')}`;
+      timerEl.className = 'otp-timer active';
+      if (remaining <= 0) {
+        clearInterval(otpTimerInterval);
+        timerEl.textContent = '❌ OTP expired. Click Resend.';
+        timerEl.className = 'otp-timer expired';
+        if (resendBtn) resendBtn.disabled = false;
+      }
+      remaining--;
+    }
+    update();
+    otpTimerInterval = setInterval(update, 1000);
+  }
+
+  async function sendLoginOTP() {
+    const email = document.getElementById('otp-email').value.trim();
+    if (!email || !email.includes('@')) return showMsg('otp-login-msg', 'Enter a valid email address', 'error');
+
+    try {
+      const res = await fetch(BASE + '/api/auth/send-otp-email', {
+        method: 'POST', headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({ email })
+      });
+      const data = await res.json();
+      if (data.error) return showMsg('otp-login-msg', data.error, 'error');
+
+      showMsg('otp-login-msg', data.message || 'OTP sent to your email!', 'success');
+      document.getElementById('otp-step1').classList.remove('active');
+      document.getElementById('otp-step2').classList.add('active');
+
+      if (data.code) {
+        document.getElementById('otp-login-hint').innerHTML =
+          `🔑 Dev OTP: <strong style="color:#ffd700;font-size:1.3rem;letter-spacing:4px">${data.code}</strong>`;
+      } else {
+        document.getElementById('otp-login-hint').textContent = `✅ OTP sent to ${email}`;
+      }
+      startOTPTimer('otp-timer', 'otp-resend-btn', 120);
+    } catch { showMsg('otp-login-msg', 'Connection error', 'error'); }
+  }
+
+  async function verifyLoginOTP() {
+    const email = document.getElementById('otp-email').value.trim();
+    const code  = document.getElementById('otp-code').value.trim();
+    if (!code) return showMsg('otp-login-msg', 'Enter the OTP', 'error');
+
+    try {
+      const res = await fetch(BASE + '/api/auth/otp-login-email', {
+        method: 'POST', headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({ email, code })
+      });
+      const data = await res.json();
+      if (data.error) return showMsg('otp-login-msg', data.error, 'error');
+      localStorage.setItem('cc_token', data.token);
+      localStorage.setItem('cc_user', data.username);
+      showMsg('otp-login-msg', 'Login successful! Redirecting...', 'success');
+      setTimeout(() => window.location.href = 'http://localhost:3000/index.html', 800);
+    } catch { showMsg('otp-login-msg', 'Connection error', 'error'); }
+  }
+
+  function resetOTPStep() {
+    document.getElementById('otp-step1').classList.add('active');
+    document.getElementById('otp-step2').classList.remove('active');
+    document.getElementById('otp-code').value = '';
+  }
+
+  // If already logged in, go to app
+  if (localStorage.getItem('cc_token')) window.location.href = 'http://localhost:3000/dashboard.html';
+</script>
+</body>
+</html>

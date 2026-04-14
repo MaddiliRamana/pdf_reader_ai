@@ -1,0 +1,298 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/><meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Screen Share — Cognitive Curator</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🧠</text></svg>"/>
+  <link rel="stylesheet" href="style.css"/>
+  <!-- Socket.io client -->
+  <script src="/socket.io/socket.io.js"></script>
+</head>
+<body>
+<header class="header">
+  <div class="header-left"><a href="/dashboard.html" class="btn btn-secondary btn-sm">← Dashboard</a></div>
+  <div class="header-center"><div class="logo">🖥️ Screen Share + Voice</div><p class="tagline">Share screen and talk over the internet — like Zoom</p></div>
+  <div class="user-bar"><span class="user-greeting" id="ug"></span><button class="btn-logout" onclick="logout()">Logout</button></div>
+</header>
+
+<div style="max-width:1000px;margin:0 auto;padding:24px">
+
+  <!-- Setup -->
+  <div class="card" style="margin-bottom:20px" id="setupCard">
+    <h3 style="color:#a78bfa;margin-bottom:14px">🚀 Start or Join a Session</h3>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px">
+      <div>
+        <p style="font-size:0.82rem;color:var(--text-muted);margin-bottom:8px;font-weight:600">CREATE NEW SESSION</p>
+        <button class="btn btn-primary" style="width:100%;padding:14px;font-size:1rem" onclick="createRoom()">🖥️ Start Screen Share Session</button>
+        <p style="font-size:0.75rem;color:var(--text-muted);margin-top:8px">Creates a 6-digit Room ID to share with your friend</p>
+      </div>
+      <div>
+        <p style="font-size:0.82rem;color:var(--text-muted);margin-bottom:8px;font-weight:600">JOIN EXISTING SESSION</p>
+        <input type="text" id="roomInput" class="input-field" placeholder="Enter Room ID (e.g. ABC123)..." style="margin-bottom:8px;text-transform:uppercase"/>
+        <button class="btn btn-secondary" style="width:100%;padding:12px" onclick="joinRoom()">🔗 Join Session</button>
+      </div>
+    </div>
+    <div style="margin-top:14px;padding:12px;background:rgba(56,189,248,0.08);border:1px solid rgba(56,189,248,0.2);border-radius:8px;font-size:0.82rem;color:#38bdf8">
+      ℹ️ Works over the internet between different devices and networks. Share the Room ID with anyone.
+    </div>
+  </div>
+
+  <!-- Session Active -->
+  <div id="sessionCard" style="display:none">
+    <div class="card" style="margin-bottom:16px">
+      <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px">
+        <div style="display:flex;align-items:center;gap:10px">
+          <div>
+            <span style="font-size:0.78rem;color:var(--text-muted)">Room ID: </span>
+            <span id="roomIdDisplay" style="font-weight:800;color:#a78bfa;font-size:1.2rem;letter-spacing:2px"></span>
+            <button class="btn btn-secondary btn-sm" onclick="copyRoomId()" style="margin-left:8px">📋 Copy</button>
+          </div>
+        </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <button class="btn btn-primary" id="btnShareScreen" onclick="toggleScreenShare()">🖥️ Share Screen</button>
+          <button class="btn btn-success" id="btnMic" onclick="toggleMic()">🎤 Mic: ON</button>
+          <button class="btn btn-secondary" id="btnCam" onclick="toggleCam()">📷 Cam: ON</button>
+          <button class="btn btn-danger" onclick="endSession()">📴 End</button>
+        </div>
+      </div>
+      <div id="connectionStatus" style="margin-top:8px;font-size:0.82rem;color:#fbbf24">⏳ Waiting for peer to connect... Share the Room ID above.</div>
+    </div>
+
+    <!-- Video Grid -->
+    <div id="videoGrid" style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px">
+      <div class="card" style="padding:0;overflow:hidden;position:relative">
+        <div style="background:var(--card2);padding:8px 12px;font-size:0.78rem;color:var(--text-muted);font-weight:600">🖥️ You (<span id="myName"></span>)</div>
+        <video id="localVideo" autoplay muted playsinline style="width:100%;background:#000;min-height:220px;display:block"></video>
+      </div>
+      <div class="card" style="padding:0;overflow:hidden;position:relative" id="remoteCard">
+        <div style="background:var(--card2);padding:8px 12px;font-size:0.78rem;color:var(--text-muted);font-weight:600" id="remoteName">👤 Waiting for peer...</div>
+        <video id="remoteVideo" autoplay playsinline style="width:100%;background:#000;min-height:220px;display:block"></video>
+        <div id="remoteWait" style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);color:var(--text-muted);font-size:0.85rem;text-align:center">
+          <div style="font-size:2rem;margin-bottom:8px">👤</div>
+          Waiting for peer to join...
+        </div>
+      </div>
+    </div>
+
+    <!-- Chat -->
+    <div class="card">
+      <h3 style="color:#a78bfa;margin-bottom:10px">💬 Session Chat</h3>
+      <div id="chatBox" style="height:160px;overflow-y:auto;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:12px;margin-bottom:10px;display:flex;flex-direction:column;gap:6px;font-size:0.85rem"></div>
+      <div style="display:flex;gap:8px">
+        <input type="text" id="chatMsg" class="input-field" placeholder="Type a message..." onkeydown="if(event.key==='Enter')sendChat()"/>
+        <button class="btn btn-primary" onclick="sendChat()">Send</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  const token = localStorage.getItem('cc_token');
+  const userName = localStorage.getItem('cc_user') || 'User';
+  if (!token) window.location.href = '/login.html';
+  document.getElementById('ug').textContent = '👤 ' + userName;
+  document.getElementById('myName').textContent = userName;
+  function logout() { localStorage.clear(); window.location.href = '/login.html'; }
+
+  // ── Socket.io + WebRTC ──
+  const socket = io();
+  let localStream = null, screenStream = null;
+  let peers = {}; // socketId → RTCPeerConnection
+  let roomId = '', isMicOn = true, isCamOn = true, isSharing = false;
+
+  const iceConfig = {
+    iceServers: [
+      { urls: 'stun:stun.l.google.com:19302' },
+      { urls: 'stun:stun1.l.google.com:19302' }
+    ]
+  };
+
+  function generateRoomId() { return Math.random().toString(36).slice(2, 8).toUpperCase(); }
+
+  async function createRoom() {
+    roomId = generateRoomId();
+    await startSession();
+  }
+
+  async function joinRoom() {
+    roomId = document.getElementById('roomInput').value.trim().toUpperCase();
+    if (!roomId) { alert('Enter a Room ID.'); return; }
+    await startSession();
+  }
+
+  async function startSession() {
+    document.getElementById('roomIdDisplay').textContent = roomId;
+    document.getElementById('setupCard').style.display = 'none';
+    document.getElementById('sessionCard').style.display = 'block';
+
+    await startLocalMedia();
+    socket.emit('join-room', { roomId, userName });
+    addChat('System', `Joined room ${roomId}. Share this ID with your friend.`);
+  }
+
+  async function startLocalMedia() {
+    try {
+      localStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: true });
+    } catch (_) {
+      try { localStream = await navigator.mediaDevices.getUserMedia({ audio: true }); }
+      catch (_) { addChat('System', '⚠️ No camera/mic access. Screen share still works.'); return; }
+    }
+    document.getElementById('localVideo').srcObject = localStream;
+  }
+
+  // ── Socket events ──
+  socket.on('existing-peers', async (peerIds) => {
+    for (const peerId of peerIds) {
+      await createPeerConnection(peerId, true);
+    }
+  });
+
+  socket.on('peer-joined', async ({ socketId, userName: peerName }) => {
+    addChat('System', `✅ ${peerName} joined the session!`);
+    document.getElementById('connectionStatus').textContent = `✅ ${peerName} is connected`;
+    document.getElementById('connectionStatus').style.color = '#4ade80';
+    document.getElementById('remoteName').textContent = `👤 ${peerName}`;
+    document.getElementById('remoteWait').style.display = 'none';
+    await createPeerConnection(socketId, true);
+  });
+
+  socket.on('offer', async ({ from, sdp, userName: peerName }) => {
+    if (!peers[from]) await createPeerConnection(from, false);
+    await peers[from].setRemoteDescription(sdp);
+    const answer = await peers[from].createAnswer();
+    await peers[from].setLocalDescription(answer);
+    socket.emit('answer', { to: from, sdp: answer });
+    document.getElementById('remoteName').textContent = `👤 ${peerName}`;
+    document.getElementById('remoteWait').style.display = 'none';
+    document.getElementById('connectionStatus').textContent = `✅ ${peerName} connected`;
+    document.getElementById('connectionStatus').style.color = '#4ade80';
+  });
+
+  socket.on('answer', async ({ from, sdp }) => {
+    if (peers[from]) await peers[from].setRemoteDescription(sdp);
+  });
+
+  socket.on('ice', async ({ from, candidate }) => {
+    if (peers[from]) try { await peers[from].addIceCandidate(candidate); } catch (_) {}
+  });
+
+  socket.on('peer-left', ({ userName: peerName }) => {
+    addChat('System', `${peerName} left the session.`);
+    document.getElementById('remoteVideo').srcObject = null;
+    document.getElementById('remoteWait').style.display = 'block';
+    document.getElementById('connectionStatus').textContent = '⏳ Peer disconnected. Waiting...';
+    document.getElementById('connectionStatus').style.color = '#fbbf24';
+  });
+
+  socket.on('chat', ({ from, text }) => addChat(from, text));
+
+  async function createPeerConnection(peerId, isInitiator) {
+    const pc = new RTCPeerConnection(iceConfig);
+    peers[peerId] = pc;
+
+    if (localStream) localStream.getTracks().forEach(t => pc.addTrack(t, localStream));
+
+    pc.ontrack = (e) => {
+      document.getElementById('remoteVideo').srcObject = e.streams[0];
+      document.getElementById('remoteWait').style.display = 'none';
+    };
+
+    pc.onicecandidate = (e) => {
+      if (e.candidate) socket.emit('ice', { to: peerId, candidate: e.candidate });
+    };
+
+    if (isInitiator) {
+      const offer = await pc.createOffer();
+      await pc.setLocalDescription(offer);
+      socket.emit('offer', { to: peerId, sdp: offer });
+    }
+    return pc;
+  }
+
+  // ── Screen Share ──
+  async function toggleScreenShare() {
+    if (!isSharing) {
+      try {
+        screenStream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true });
+        const videoTrack = screenStream.getVideoTracks()[0];
+        // Replace video track in all peer connections
+        Object.values(peers).forEach(pc => {
+          const sender = pc.getSenders().find(s => s.track?.kind === 'video');
+          if (sender) sender.replaceTrack(videoTrack);
+        });
+        document.getElementById('localVideo').srcObject = screenStream;
+        videoTrack.onended = stopScreenShare;
+        isSharing = true;
+        document.getElementById('btnShareScreen').textContent = '⏹ Stop Sharing';
+        document.getElementById('btnShareScreen').className = 'btn btn-danger';
+        addChat('System', '🖥️ Screen sharing started.');
+      } catch (_) { addChat('System', 'Screen share cancelled.'); }
+    } else {
+      stopScreenShare();
+    }
+  }
+
+  function stopScreenShare() {
+    if (screenStream) screenStream.getTracks().forEach(t => t.stop());
+    if (localStream) {
+      document.getElementById('localVideo').srcObject = localStream;
+      const vt = localStream.getVideoTracks()[0];
+      Object.values(peers).forEach(pc => {
+        const sender = pc.getSenders().find(s => s.track?.kind === 'video');
+        if (sender && vt) sender.replaceTrack(vt);
+      });
+    }
+    isSharing = false;
+    document.getElementById('btnShareScreen').textContent = '🖥️ Share Screen';
+    document.getElementById('btnShareScreen').className = 'btn btn-primary';
+    addChat('System', 'Screen sharing stopped.');
+  }
+
+  function toggleMic() {
+    if (!localStream) return;
+    const t = localStream.getAudioTracks()[0];
+    if (!t) return;
+    isMicOn = !isMicOn; t.enabled = isMicOn;
+    document.getElementById('btnMic').textContent = isMicOn ? '🎤 Mic: ON' : '🔇 Mic: OFF';
+    document.getElementById('btnMic').className = isMicOn ? 'btn btn-success' : 'btn btn-secondary';
+  }
+
+  function toggleCam() {
+    if (!localStream) return;
+    const t = localStream.getVideoTracks()[0];
+    if (!t) return;
+    isCamOn = !isCamOn; t.enabled = isCamOn;
+    document.getElementById('btnCam').textContent = isCamOn ? '📷 Cam: ON' : '📷 Cam: OFF';
+    document.getElementById('btnCam').className = isCamOn ? 'btn btn-secondary' : 'btn btn-secondary';
+  }
+
+  function sendChat() {
+    const msg = document.getElementById('chatMsg').value.trim();
+    if (!msg) return;
+    socket.emit('chat', { roomId, text: msg });
+    document.getElementById('chatMsg').value = '';
+  }
+
+  function addChat(from, text) {
+    const box = document.getElementById('chatBox');
+    const isMe = from === userName;
+    const isSystem = from === 'System';
+    box.innerHTML += `<div style="align-self:${isMe?'flex-end':isSystem?'center':'flex-start'};background:${isMe?'rgba(108,99,255,0.2)':isSystem?'transparent':'var(--card2)'};border-radius:8px;padding:${isSystem?'4px 0':'6px 10px'};max-width:85%;color:${isSystem?'var(--text-muted)':'var(--text)'};font-size:${isSystem?'0.75rem':'0.85rem'};font-style:${isSystem?'italic':'normal'}">${isSystem?text:`<b style="font-size:0.72rem;color:${isMe?'#a78bfa':'#38bdf8'}">${from}</b><br>${text}`}</div>`;
+    box.scrollTop = box.scrollHeight;
+  }
+
+  function copyRoomId() {
+    navigator.clipboard.writeText(roomId);
+    addChat('System', 'Room ID copied to clipboard!');
+  }
+
+  function endSession() {
+    Object.values(peers).forEach(pc => pc.close());
+    if (localStream) localStream.getTracks().forEach(t => t.stop());
+    if (screenStream) screenStream.getTracks().forEach(t => t.stop());
+    socket.disconnect();
+    window.location.href = '/dashboard.html';
+  }
+</script>
+</body>
+</html>

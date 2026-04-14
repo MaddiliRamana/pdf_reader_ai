@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Text Analyzer — Cognitive Curator</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🧠</text></svg>"/>
+  <link rel="stylesheet" href="style.css"/>
+  <script src="jspdf.umd.min.js"></script>
+</head>
+<body>
+<header class="header">
+  <div class="header-left">
+    <a href="/dashboard.html" class="btn btn-secondary btn-sm">← Dashboard</a>
+  </div>
+  <div class="header-center">
+    <div class="logo">📝 Text Analyzer</div>
+    <p class="tagline">Paste any text — AI transforms it into knowledge</p>
+  </div>
+  <div class="user-bar">
+    <span class="user-greeting" id="userGreeting"></span>
+    <button class="btn-logout" onclick="logout()">Logout</button>
+  </div>
+</header>
+
+<div style="max-width:1100px;margin:0 auto;padding:24px;display:grid;grid-template-columns:1fr 1fr;gap:24px">
+
+  <!-- LEFT: Input -->
+  <div>
+    <div class="card" style="margin-bottom:16px">
+      <h3 style="color:#a78bfa;margin-bottom:12px">📥 Input Text</h3>
+      <textarea id="textInput" style="width:100%;height:280px;background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:14px;font-size:0.9rem;resize:vertical;outline:none;font-family:inherit" placeholder="Paste or type any text here...&#10;&#10;Examples:&#10;• Article or blog post&#10;• Study notes&#10;• Research paper content&#10;• Any topic you want to learn"></textarea>
+      <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">
+        <button class="btn btn-primary" onclick="processText('notes')">✨ Generate Notes</button>
+        <button class="btn btn-secondary" onclick="processText('summary')">📋 Summary</button>
+        <button class="btn btn-secondary" onclick="processText('keypoints')">🎯 Key Points</button>
+        <button class="btn btn-secondary" onclick="processText('quiz')">🧪 Quiz</button>
+        <button class="btn btn-secondary" onclick="processText('simple')">🧒 Simplify</button>
+        <button class="btn btn-secondary" onclick="processText('advanced')">🎓 Advanced</button>
+        <button class="btn btn-secondary" onclick="clearAll()">✕ Clear</button>
+      </div>
+    </div>
+
+    <!-- Chat -->
+    <div class="card">
+      <h3 style="color:#a78bfa;margin-bottom:12px">💬 Ask About This Text</h3>
+      <div id="chatBox" style="height:200px;overflow-y:auto;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:12px;margin-bottom:10px;display:flex;flex-direction:column;gap:8px"></div>
+      <div style="display:flex;gap:8px">
+        <input type="text" id="chatInput" class="input-field" placeholder="Ask anything about the text..." onkeydown="if(event.key==='Enter')chatAsk()"/>
+        <button class="btn btn-primary" onclick="chatAsk()">Ask</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- RIGHT: Output -->
+  <div>
+    <div class="card">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+        <h3 style="color:#a78bfa" id="outputTitle">📄 Output</h3>
+        <div style="display:flex;gap:8px">
+          <button class="btn btn-secondary btn-sm" id="btnDownloadText" onclick="downloadOutput()" style="display:none">⬇ Download</button>
+          <button class="btn btn-secondary btn-sm" id="btnCopyText" onclick="copyOutput()" style="display:none">📋 Copy</button>
+        </div>
+      </div>
+      <div id="textLoader" class="loader hidden"><div class="spinner"></div><span id="loaderMsg">Processing...</span></div>
+      <div id="outputBox" style="min-height:200px;max-height:500px;overflow-y:auto;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:16px;font-size:0.9rem;line-height:1.7;white-space:pre-wrap;color:var(--text)">
+        <p style="color:var(--text-muted);font-style:italic">Output will appear here after processing...</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  const BASE = 'http://localhost:3000';
+  const token = localStorage.getItem('cc_token');
+  const user  = localStorage.getItem('cc_user');
+  if (!token) window.location.href = '/login.html';
+  document.getElementById('userGreeting').textContent = '👤 ' + (user || '');
+  function logout() { localStorage.clear(); window.location.href = '/login.html'; }
+
+  let lastOutput = '';
+
+  async function apiFetch(url, body) {
+    const res = await fetch(BASE + url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+      body: JSON.stringify(body)
+    });
+    return res.json();
+  }
+
+  async function processText(mode) {
+    const text = document.getElementById('textInput').value.trim();
+    if (!text) { alert('Please enter some text first.'); return; }
+
+    const loader = document.getElementById('textLoader');
+    const output = document.getElementById('outputBox');
+    const titles = { notes:'✨ AI Notes', summary:'📋 Summary', keypoints:'🎯 Key Points', quiz:'🧪 Quiz', simple:'🧒 Simple Explanation', advanced:'🎓 Advanced Explanation' };
+    document.getElementById('outputTitle').textContent = titles[mode] || '📄 Output';
+    document.getElementById('loaderMsg').textContent = 'Generating ' + (titles[mode] || '') + '...';
+    loader.classList.remove('hidden');
+    output.textContent = '';
+
+    try {
+      const data = await apiFetch('/api/text-process', { text, mode });
+      if (data.error) throw new Error(data.error);
+      lastOutput = data.result;
+      output.textContent = data.result;
+      document.getElementById('btnDownloadText').style.display = 'inline-flex';
+      document.getElementById('btnCopyText').style.display = 'inline-flex';
+    } catch(e) {
+      output.textContent = 'Error: ' + e.message;
+    } finally {
+      loader.classList.add('hidden');
+    }
+  }
+
+  async function chatAsk() {
+    const q    = document.getElementById('chatInput').value.trim();
+    const text = document.getElementById('textInput').value.trim();
+    if (!q) return;
+    if (!text) { alert('Please enter text first.'); return; }
+
+    const box = document.getElementById('chatBox');
+    box.innerHTML += `<div style="background:rgba(108,99,255,0.15);border-radius:8px;padding:8px 12px;align-self:flex-end;font-size:0.88rem">🧑 ${q}</div>`;
+    document.getElementById('chatInput').value = '';
+    const thinkId = 'think' + Date.now();
+    box.innerHTML += `<div id="${thinkId}" style="background:var(--card2);border-radius:8px;padding:8px 12px;font-size:0.88rem;color:var(--text-muted)">🤖 Thinking...</div>`;
+    box.scrollTop = box.scrollHeight;
+
+    try {
+      const data = await apiFetch('/api/ask', { question: q, pdfText: text });
+      document.getElementById(thinkId).outerHTML = `<div style="background:var(--card2);border-radius:8px;padding:8px 12px;font-size:0.88rem">🤖 ${data.answer || data.error}</div>`;
+    } catch(e) {
+      document.getElementById(thinkId).outerHTML = `<div style="color:#f87171;font-size:0.88rem">❌ ${e.message}</div>`;
+    }
+    box.scrollTop = box.scrollHeight;
+  }
+
+  function downloadOutput() {
+    if (!lastOutput) return;
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF();
+    const lines = doc.splitTextToSize(lastOutput, 180);
+    let y = 20;
+    doc.setFontSize(11);
+    lines.forEach(l => { if (y > 275) { doc.addPage(); y = 20; } doc.text(l, 15, y); y += 6; });
+    doc.save('text-analysis.pdf');
+  }
+
+  function copyOutput() {
+    navigator.clipboard.writeText(lastOutput);
+    document.getElementById('btnCopyText').textContent = '✅ Copied!';
+    setTimeout(() => document.getElementById('btnCopyText').textContent = '📋 Copy', 2000);
+  }
+
+  function clearAll() {
+    document.getElementById('textInput').value = '';
+    document.getElementById('outputBox').innerHTML = '<p style="color:var(--text-muted);font-style:italic">Output will appear here after processing...</p>';
+    document.getElementById('chatBox').innerHTML = '';
+    lastOutput = '';
+    document.getElementById('btnDownloadText').style.display = 'none';
+    document.getElementById('btnCopyText').style.display = 'none';
+  }
+</script>
+</body>
+</html>

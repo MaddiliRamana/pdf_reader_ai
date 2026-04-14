@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/><meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Video Notes (Auto Note 2.0) — Cognitive Curator</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🧠</text></svg>"/>
+  <link rel="stylesheet" href="style.css"/>
+  <script src="jspdf.umd.min.js"></script>
+</head>
+<body>
+<header class="header">
+  <div class="header-left"><a href="/dashboard.html" class="btn btn-secondary btn-sm">← Dashboard</a></div>
+  <div class="header-center">
+    <div class="logo">🎬 Auto Note 2.0</div>
+    <p class="tagline">Upload video or paste YouTube link — AI generates full notes from audio</p>
+  </div>
+  <div class="user-bar"><span class="user-greeting" id="ug"></span><button class="btn-logout" onclick="logout()">Logout</button></div>
+</header>
+
+<div style="max-width:1300px;margin:0 auto;padding:24px">
+
+  <!-- Input Section -->
+  <div class="card" style="margin-bottom:20px">
+    <h3 style="color:#a78bfa;margin-bottom:14px">📥 Input Source</h3>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px">
+
+      <!-- Upload Video -->
+      <div>
+        <p style="font-size:0.82rem;color:var(--text-muted);margin-bottom:8px;font-weight:600">OPTION 1 — Upload Video File</p>
+        <div class="upload-area" onclick="document.getElementById('videoInput').click()" style="padding:20px">
+          <div class="upload-icon" style="font-size:2rem">🎬</div>
+          <p style="font-size:0.88rem">Click to upload video</p>
+          <p style="font-size:0.75rem;color:var(--text-muted);margin-top:4px">MP4, MOV, AVI, WebM (max 25MB)</p>
+          <input type="file" id="videoInput" accept="video/*" hidden onchange="handleVideoFile(this.files[0])"/>
+        </div>
+      </div>
+
+      <!-- YouTube Link -->
+      <div>
+        <p style="font-size:0.82rem;color:var(--text-muted);margin-bottom:8px;font-weight:600">OPTION 2 — YouTube Link</p>
+        <div style="background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:20px">
+          <input type="text" id="ytLink" class="input-field" style="width:100%;margin-bottom:10px" placeholder="https://www.youtube.com/watch?v=..." />
+          <button class="btn btn-primary" style="width:100%" onclick="handleYouTube()">▶ Load YouTube Video</button>
+          <p style="font-size:0.75rem;color:var(--text-muted);margin-top:8px">⚠️ YouTube transcription uses available captions/subtitles</p>
+        </div>
+      </div>
+    </div>
+    <div id="videoStatus" class="status-msg hidden" style="margin-top:12px"></div>
+  </div>
+
+  <!-- Main Layout: Video + Notes -->
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px">
+
+    <!-- LEFT: Video Player + Transcript -->
+    <div>
+      <div class="card" style="margin-bottom:16px">
+        <h3 style="color:#a78bfa;margin-bottom:12px">▶ Video Player</h3>
+        <div id="videoPlayerWrap" style="background:#000;border-radius:8px;overflow:hidden;min-height:200px;display:flex;align-items:center;justify-content:center">
+          <div id="videoPlaceholder" style="text-align:center;color:var(--text-muted);padding:40px">
+            <div style="font-size:3rem;margin-bottom:8px">🎬</div>
+            <p>Video will appear here</p>
+          </div>
+          <video id="videoEl" controls style="width:100%;display:none;border-radius:8px"></video>
+          <div id="ytEmbed" style="width:100%;display:none">
+            <iframe id="ytFrame" width="100%" height="280" frameborder="0" allowfullscreen style="border-radius:8px"></iframe>
+          </div>
+        </div>
+      </div>
+
+      <!-- Transcript -->
+      <div class="card">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+          <h3 style="color:#a78bfa">📝 Transcript</h3>
+          <div style="display:flex;gap:8px">
+            <button class="btn btn-primary btn-sm" id="btnTranscribeVideo" onclick="transcribeVideo()" disabled>🎙️ Transcribe</button>
+            <button class="btn btn-secondary btn-sm" id="btnCopyTranscript" onclick="copyTranscript()" style="display:none">📋 Copy</button>
+          </div>
+        </div>
+        <div id="transcriptLoader" class="loader hidden"><div class="spinner"></div><span>Transcribing with Groq Whisper...</span></div>
+        <div id="transcriptBox" style="height:220px;overflow-y:auto;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:14px;font-size:0.85rem;line-height:1.7;color:var(--text)">
+          <p style="color:var(--text-muted);font-style:italic">Transcript will appear here after transcription...</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- RIGHT: Notes Panel -->
+    <div>
+      <div class="card">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+          <h3 style="color:#a78bfa">✨ AI Notes Panel</h3>
+          <div style="display:flex;gap:6px">
+            <button class="btn btn-secondary btn-sm" id="btnDlNotes" onclick="downloadNotes()" style="display:none">⬇ PDF</button>
+            <button class="btn btn-secondary btn-sm" id="btnCopyNotes" onclick="copyNotes()" style="display:none">📋 Copy</button>
+          </div>
+        </div>
+
+        <!-- Tabs -->
+        <div style="display:flex;gap:4px;margin-bottom:14px;background:var(--bg);border-radius:8px;padding:4px">
+          <button class="note-tab active" id="tab-notes"     onclick="switchTab('notes')">📝 Notes</button>
+          <button class="note-tab"        id="tab-summary"   onclick="switchTab('summary')">📋 Summary</button>
+          <button class="note-tab"        id="tab-keypoints" onclick="switchTab('keypoints')">🎯 Key Points</button>
+          <button class="note-tab"        id="tab-quiz"      onclick="switchTab('quiz')">🧪 Quiz</button>
+        </div>
+
+        <!-- Generate buttons -->
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px">
+          <button class="btn btn-primary" id="btnGenerate" onclick="generateNotes()" disabled>✨ Generate</button>
+          <button class="btn btn-secondary" onclick="generateAll()" id="btnGenAll" disabled>⚡ Generate All</button>
+          <select id="noteStyle" class="lang-select">
+            <option value="notes">Full Notes</option>
+            <option value="summary">Summary</option>
+            <option value="keypoints">Key Points</option>
+            <option value="quiz">Quiz</option>
+            <option value="simple">Simple (ELI5)</option>
+            <option value="advanced">Advanced</option>
+          </select>
+        </div>
+
+        <div id="notesLoader" class="loader hidden"><div class="spinner"></div><span id="notesLoaderMsg">Generating with Groq LLaMA3...</span></div>
+
+        <!-- Tab content -->
+        <div id="notesContent" style="height:320px;overflow-y:auto;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:14px;font-size:0.88rem;line-height:1.7;white-space:pre-wrap;color:var(--text)">
+          <p style="color:var(--text-muted);font-style:italic">Transcribe the video first, then generate notes...</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<style>
+  .note-tab{flex:1;padding:7px;border:none;background:none;color:var(--text-muted);border-radius:6px;cursor:pointer;font-size:0.78rem;font-weight:600;transition:all 0.2s}
+  .note-tab.active{background:var(--primary);color:#fff}
+  .note-tab:hover:not(.active){background:var(--card2)}
+</style>
+
+<script>
+  const BASE='http://localhost:3000';
+  const token=localStorage.getItem('cc_token');
+  if(!token)window.location.href='/login.html';
+  document.getElementById('ug').textContent='👤 '+(localStorage.getItem('cc_user')||'');
+  function logout(){localStorage.clear();window.location.href='/login.html';}
+
+  let videoFile=null, transcript='', currentTab='notes';
+  const tabData={notes:'',summary:'',keypoints:'',quiz:''};
+
+  function handleVideoFile(file) {
+    if(!file)return;
+    videoFile=file;
+    const url=URL.createObjectURL(file);
+    document.getElementById('videoEl').src=url;
+    document.getElementById('videoEl').style.display='block';
+    document.getElementById('videoPlaceholder').style.display='none';
+    document.getElementById('ytEmbed').style.display='none';
+    setStatus('✅ '+file.name+' loaded ('+Math.round(file.size/1024/1024,1)+'MB)','success');
+    document.getElementById('btnTranscribeVideo').disabled=false;
+  }
+
+  function handleYouTube() {
+    const url=document.getElementById('ytLink').value.trim();
+    if(!url){alert('Enter a YouTube URL.');return;}
+    const match=url.match(/(?:v=|youtu\.be\/)([a-zA-Z0-9_-]{11})/);
+    if(!match){alert('Invalid YouTube URL.');return;}
+    const vid=match[1];
+    document.getElementById('ytFrame').src=`https://www.youtube.com/embed/${vid}`;
+    document.getElementById('ytEmbed').style.display='block';
+    document.getElementById('videoEl').style.display='none';
+    document.getElementById('videoPlaceholder').style.display='none';
+    setStatus('✅ YouTube video loaded. Note: Transcription requires video file upload.','success');
+    // For YouTube, we can't transcribe directly — show message
+    document.getElementById('transcriptBox').innerHTML='<p style="color:#fbbf24">⚠️ YouTube transcription requires downloading the video first. Upload the video file to transcribe with Groq Whisper.</p>';
+  }
+
+  async function transcribeVideo() {
+    if(!videoFile){alert('Upload a video file first.');return;}
+    const loader=document.getElementById('transcriptLoader');
+    const box=document.getElementById('transcriptBox');
+    loader.classList.remove('hidden');
+    box.textContent='';
+
+    const fd=new FormData(); fd.append('audio',videoFile);
+    try {
+      const res=await fetch(BASE+'/api/process-audio',{method:'POST',headers:{'Authorization':'Bearer '+token},body:fd});
+      const data=await res.json();
+      if(data.error)throw new Error(data.error);
+      transcript=data.transcript;
+      box.textContent=transcript;
+      document.getElementById('btnCopyTranscript').style.display='inline-flex';
+      document.getElementById('btnGenerate').disabled=false;
+      document.getElementById('btnGenAll').disabled=false;
+      setStatus('✅ Transcribed! '+data.chars+' characters extracted','success');
+    } catch(e){
+      box.textContent='Error: '+e.message;
+      setStatus('❌ '+e.message,'error');
+    }
+    loader.classList.add('hidden');
+  }
+
+  function switchTab(tab) {
+    currentTab=tab;
+    document.querySelectorAll('.note-tab').forEach(t=>t.classList.remove('active'));
+    document.getElementById('tab-'+tab).classList.add('active');
+    document.getElementById('noteStyle').value=tab;
+    const content=tabData[tab];
+    document.getElementById('notesContent').textContent=content||'Click Generate to create '+tab+' for this tab.';
+    const hasCont=!!content;
+    document.getElementById('btnDlNotes').style.display=hasCont?'inline-flex':'none';
+    document.getElementById('btnCopyNotes').style.display=hasCont?'inline-flex':'none';
+  }
+
+  async function generateNotes() {
+    if(!transcript){alert('Transcribe video first.');return;}
+    const mode=document.getElementById('noteStyle').value;
+    const loader=document.getElementById('notesLoader');
+    document.getElementById('notesLoaderMsg').textContent='Generating '+mode+' with Groq LLaMA3 (free)...';
+    loader.classList.remove('hidden');
+    try {
+      const res=await fetch(BASE+'/api/text-process',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+token},body:JSON.stringify({text:transcript,mode})});
+      const data=await res.json();
+      if(data.error)throw new Error(data.error);
+      const tabKey=['notes','summary','keypoints','quiz'].includes(mode)?mode:'notes';
+      tabData[tabKey]=data.result;
+      currentTab=tabKey;
+      document.querySelectorAll('.note-tab').forEach(t=>t.classList.remove('active'));
+      document.getElementById('tab-'+tabKey).classList.add('active');
+      document.getElementById('notesContent').textContent=data.result;
+      document.getElementById('btnDlNotes').style.display='inline-flex';
+      document.getElementById('btnCopyNotes').style.display='inline-flex';
+    } catch(e){document.getElementById('notesContent').textContent='Error: '+e.message;}
+    loader.classList.add('hidden');
+  }
+
+  async function generateAll() {
+    if(!transcript){alert('Transcribe video first.');return;}
+    for(const mode of['notes','summary','keypoints','quiz']){
+      document.getElementById('noteStyle').value=mode;
+      await generateNotes();
+      await new Promise(r=>setTimeout(r,500));
+    }
+  }
+
+  function copyTranscript(){navigator.clipboard.writeText(transcript);}
+  function copyNotes(){navigator.clipboard.writeText(tabData[currentTab]||'');}
+
+  function downloadNotes(){
+    const content=tabData[currentTab];
+    if(!content)return;
+    const {jsPDF}=window.jspdf; const doc=new jsPDF();
+    doc.setFontSize(14); doc.setTextColor(108,99,255);
+    doc.text('Video Notes — '+currentTab.toUpperCase(),15,15);
+    doc.setFontSize(10); doc.setTextColor(30,30,30);
+    const lines=doc.splitTextToSize(content,180); let y=25;
+    lines.forEach(l=>{if(y>275){doc.addPage();y=15;}doc.text(l,15,y);y+=6;});
+    doc.save('video-'+currentTab+'.pdf');
+  }
+
+  function setStatus(msg,type){
+    const el=document.getElementById('videoStatus');
+    el.textContent=msg;
+    el.className='status-msg status-'+type;
+    el.classList.remove('hidden');
+  }
+</script>
+</body>
+</html>

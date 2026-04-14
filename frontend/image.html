@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/><meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Image Analyzer — Cognitive Curator</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🧠</text></svg>"/>
+  <link rel="stylesheet" href="style.css"/>
+</head>
+<body>
+<header class="header">
+  <div class="header-left"><a href="/dashboard.html" class="btn btn-secondary btn-sm">← Dashboard</a></div>
+  <div class="header-center"><div class="logo">🖼️ Image Analyzer</div><p class="tagline">Upload any image — AI describes, explains and extracts text</p></div>
+  <div class="user-bar"><span class="user-greeting" id="ug"></span><button class="btn-logout" onclick="logout()">Logout</button></div>
+</header>
+
+<div style="max-width:1100px;margin:0 auto;padding:24px;display:grid;grid-template-columns:1fr 1fr;gap:24px">
+  <div>
+    <div class="card" style="margin-bottom:16px">
+      <h3 style="color:#a78bfa;margin-bottom:12px">📥 Upload Image</h3>
+      <div class="upload-area" onclick="document.getElementById('imgInput').click()">
+        <div class="upload-icon">🖼️</div>
+        <p>Click to upload image (JPG, PNG, GIF, WebP)</p>
+        <input type="file" id="imgInput" accept="image/*" hidden onchange="handleImage(this.files[0])"/>
+      </div>
+      <div id="imgPreviewWrap" style="display:none;margin-top:12px;text-align:center">
+        <img id="imgPreview" style="max-width:100%;max-height:250px;border-radius:8px;border:1px solid var(--border)"/>
+      </div>
+    </div>
+    <div class="card">
+      <h3 style="color:#a78bfa;margin-bottom:12px">🛠️ AI Actions</h3>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button class="btn btn-primary" onclick="analyzeImage('describe')">👁️ Describe Image</button>
+        <button class="btn btn-secondary" onclick="analyzeImage('extract')">📝 Extract Text (OCR)</button>
+        <button class="btn btn-secondary" onclick="analyzeImage('explain')">🎓 Explain Diagram</button>
+        <button class="btn btn-secondary" onclick="analyzeImage('notes')">✨ Generate Notes</button>
+      </div>
+    </div>
+  </div>
+  <div class="card">
+    <h3 style="color:#a78bfa;margin-bottom:12px" id="imgOutputTitle">📄 AI Analysis</h3>
+    <div id="imgLoader" class="loader hidden"><div class="spinner"></div><span>Analyzing image...</span></div>
+    <div id="imgOutput" style="min-height:300px;max-height:550px;overflow-y:auto;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:16px;font-size:0.9rem;line-height:1.7;white-space:pre-wrap;color:var(--text)">
+      <p style="color:var(--text-muted);font-style:italic">Upload an image and select an action...</p>
+    </div>
+  </div>
+</div>
+
+<script>
+  const BASE='http://localhost:3000';
+  const token=localStorage.getItem('cc_token');
+  if(!token)window.location.href='/login.html';
+  document.getElementById('ug').textContent='👤 '+(localStorage.getItem('cc_user')||'');
+  function logout(){localStorage.clear();window.location.href='/login.html';}
+  let imgBase64='', imgMime='';
+
+  function handleImage(file) {
+    if(!file)return;
+    const reader=new FileReader();
+    reader.onload=e=>{
+      imgBase64=e.target.result.split(',')[1];
+      imgMime=file.type;
+      document.getElementById('imgPreview').src=e.target.result;
+      document.getElementById('imgPreviewWrap').style.display='block';
+    };
+    reader.readAsDataURL(file);
+  }
+
+  async function analyzeImage(mode) {
+    if(!imgBase64){alert('Upload an image first.');return;}
+    document.getElementById('imgLoader').classList.remove('hidden');
+    document.getElementById('imgOutput').textContent='';
+    try {
+      const res=await fetch(BASE+'/api/process-image',{
+        method:'POST',
+        headers:{'Content-Type':'application/json','Authorization':'Bearer '+token},
+        body:JSON.stringify({imageBase64:imgBase64,mimeType:imgMime,mode})
+      });
+      const data=await res.json();
+      if(data.error)throw new Error(data.error);
+      document.getElementById('imgOutput').textContent=data.result;
+    } catch(e){document.getElementById('imgOutput').textContent='Error: '+e.message;}
+    finally{document.getElementById('imgLoader').classList.add('hidden');}
+  }
+</script>
+</body>
+</html>

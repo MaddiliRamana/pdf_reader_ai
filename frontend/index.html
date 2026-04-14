@@ -1,0 +1,491 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Cognitive Curator</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🧠</text></svg>" />
+  <link rel="stylesheet" href="style.css" />
+  <!-- Local libraries - no CDN, no tracking prevention issues -->
+  <script src="pdf.min.js"></script>
+  <script src="jspdf.umd.min.js"></script>
+</head>
+<body>
+
+<!-- ── HEADER ── -->
+<header class="header">
+  <!-- LEFT BUTTONS -->
+  <div class="header-left">
+    <button class="btn-eye-comfort" id="btnEyeComfort" onclick="toggleEyeComfort()">🌙 Eye Comfort</button>
+    <button class="btn-focus-mode"  id="btnFocusMode"  onclick="toggleFocusMode()">🎯 Focus Mode</button>
+    <button class="btn-focus-toggle" id="btnFocusToggle" onclick="toggleFocusAlert()">🔔 Focus: ON</button>
+  </div>
+
+  <!-- CENTER TITLE -->
+  <div class="header-center">
+    <div class="logo">🧠 Cognitive Curator</div>
+    <p class="tagline">AI-Powered Smart Reading Experience</p>
+  </div>
+
+  <!-- RIGHT BUTTONS -->
+  <div class="user-bar">
+    <span class="user-greeting" id="userGreeting"></span>
+    <a href="/library.html" class="btn-library">📚 My Library</a>
+    <button class="btn-logout" onclick="logout()">Logout</button>
+  </div>
+</header>
+
+<!-- DISTRACTION ALERT MODAL -->
+<div id="distractionModal" class="distraction-modal hidden">
+  <div class="distraction-box">
+    <div class="distraction-icon">⚠️</div>
+    <h3 class="distraction-title">Stay Focused!</h3>
+    <p class="distraction-msg">You switched away. Come back and continue learning.</p>
+    <button class="btn-resume" onclick="resumeFocus()">▶ Resume Learning</button>
+  </div>
+</div>
+
+<!-- ── UPLOAD SECTION ── -->
+<section class="card upload-section">
+  <h2>📄 Upload Your PDF</h2>
+  <div class="upload-area" id="uploadArea">
+    <div class="upload-icon">📂</div>
+    <p>Drag & drop your PDF here or click to browse</p>
+    <input type="file" id="pdfInput" accept=".pdf" hidden />
+    <button class="btn btn-primary" onclick="document.getElementById('pdfInput').click()">Choose PDF</button>
+  </div>
+
+  <!-- PAGE RANGE SELECTOR — appears after PDF selected -->
+  <div id="pageRangeBox" class="page-range-box hidden">
+    <p id="pageRangeInfo" class="page-range-info"></p>
+    <div class="page-range-row">
+      <label>From page:</label>
+      <input type="number" id="pageFrom" class="page-range-input" min="1" value="1" />
+      <label>To page:</label>
+      <input type="number" id="pageTo" class="page-range-input" min="1" />
+      <button class="btn btn-primary" onclick="loadSelectedPages()">📖 Load Pages</button>
+      <button class="btn btn-secondary" onclick="loadAllPages()">Load All</button>
+    </div>
+  </div>
+
+  <div id="uploadStatus" class="status-msg hidden"></div>
+</section>
+
+<!-- ── MAIN LAYOUT ── -->
+<div class="main-layout" id="mainLayout" style="display:none">
+
+  <!-- TOP: PDF VIEWER -->
+  <div class="pdf-panel">
+    <div class="panel-header">
+      <span>📖 PDF Viewer</span>
+      <span id="pageInfo" class="page-info"></span>
+    </div>
+    <!-- PDF SEARCH BAR -->
+    <div class="pdf-search-bar">
+      <input type="text" id="pdfSearchInput" class="pdf-search-input" placeholder="🔍 Search word in PDF..." />
+      <button class="btn btn-sm btn-primary" onclick="searchInPDF()">Find</button>
+      <button class="btn btn-sm btn-secondary" id="btnPrevMatch" onclick="prevMatch()" style="display:none">◀</button>
+      <button class="btn btn-sm btn-secondary" id="btnNextMatch" onclick="nextMatch()" style="display:none">▶</button>
+      <button class="btn btn-sm btn-secondary" onclick="clearPDFSearch()" id="btnClearSearch" style="display:none">✕</button>
+      <span id="pdfSearchStatus" class="pdf-search-status"></span>
+    </div>
+    <div class="pdf-viewer-wrap" id="pdfViewerWrap">
+      <div class="pdf-canvas-wrap" id="pdfCanvasWrap">
+        <canvas id="pdfCanvas"></canvas>
+        <div id="pdfTextLayer" class="pdf-text-layer"></div>
+      </div>
+    </div>
+    <div class="pdf-nav">
+      <button class="btn btn-sm" id="prevPage">◀ Prev</button>
+      <span id="pageNum">Page 1</span>
+      <button class="btn btn-sm" id="nextPage">Next ▶</button>
+      <div class="zoom-controls">
+        <button class="btn btn-sm zoom-btn" id="zoomOut" title="Zoom Out">−</button>
+        <span id="zoomLevel">100%</span>
+        <button class="btn btn-sm zoom-btn" id="zoomIn" title="Zoom In">+</button>
+        <button class="btn btn-sm zoom-btn" id="zoomReset" title="Reset Zoom">⊡</button>
+      </div>
+    </div>
+
+    <!-- READING PROGRESS BAR -->
+    <div class="progress-wrap" id="progressWrap" style="display:none">
+      <div class="progress-info">
+        <span id="progressText">Progress: 0% completed</span>
+        <button class="btn-reset-progress" onclick="resetProgress()" title="Reset progress">↺ Reset</button>
+      </div>
+      <div class="progress-bar-bg">
+        <div class="progress-bar-fill" id="progressFill"></div>
+      </div>
+    </div>
+
+    <!-- PDF AUDIO PLAYER -->
+    <div class="audio-player-wrap" id="audioPlayerWrap" style="display:none">
+      <div class="audio-player-header">
+        <span>🎧 PDF Audio Player</span>
+        <div class="audio-header-btns">
+          <select id="audioPageMode" class="audio-select">
+            <option value="all">Full PDF</option>
+            <option value="page">Current Page Only</option>
+          </select>
+          <button class="btn btn-sm btn-primary" id="btnGenerateAudio" onclick="generateAudio()">▶ Generate Audio</button>
+        </div>
+      </div>
+      <div id="audioGenLoader" class="loader hidden"><div class="spinner"></div><span>Generating audio...</span></div>
+      <div id="audioControls" class="audio-controls hidden">
+        <!-- Progress bar -->
+        <div class="audio-progress-wrap">
+          <span id="audioCurrentTime" class="audio-time">0:00</span>
+          <input type="range" id="audioSeek" class="audio-seek" value="0" min="0" step="0.1" />
+          <span id="audioDuration" class="audio-time">0:00</span>
+        </div>
+        <!-- Buttons row -->
+        <div class="audio-btn-row">
+          <button class="audio-btn" onclick="audioBackward()" title="Back 10s">⏪</button>
+          <button class="audio-btn audio-btn-play" id="btnAudioPlay" onclick="toggleAudioPlay()">▶</button>
+          <button class="audio-btn" onclick="audioStop()" title="Stop">⏹</button>
+          <button class="audio-btn" onclick="audioForward()" title="Forward 10s">⏩</button>
+          <div class="audio-vol-wrap">
+            <span>🔊</span>
+            <input type="range" id="audioVolume" class="audio-vol" min="0" max="1" step="0.05" value="1" />
+          </div>
+          <div class="audio-speed-wrap">
+            <span>⚡</span>
+            <select id="audioSpeed" class="audio-select" onchange="changeAudioSpeed()">
+              <option value="0.5">0.5x</option>
+              <option value="0.75">0.75x</option>
+              <option value="1" selected>1x</option>
+              <option value="1.25">1.25x</option>
+              <option value="1.5">1.5x</option>
+              <option value="2">2x</option>
+            </select>
+          </div>
+          <button class="audio-btn audio-btn-dl" id="btnDownloadAudio" onclick="downloadAudio()" title="Download">⬇ MP3</button>
+        </div>
+      </div>
+      <audio id="pdfAudio" style="display:none"></audio>
+    </div>
+  </div><!-- /pdf-panel -->
+
+  <!-- VISUAL LEARNING MODE -->
+  <div class="card feature-card" id="visualLearningCard">
+    <h3>🧩 Visual Learning Mode</h3>
+    <p class="quiz-desc">Convert your PDF into Mind Maps and Flowcharts for faster visual understanding</p>
+
+    <!-- Topic input -->
+    <div class="visual-topic-row">
+      <input type="text" id="visualTopicInput" class="input-field"
+        placeholder="Enter a topic (e.g. Machine Learning, Neural Networks)... or leave empty for full PDF" />
+    </div>
+
+    <div class="visual-btn-row">
+      <button class="btn-visual mindmap" id="btnMindmap" onclick="generateVisualization('mindmap')">🧠 Generate Mind Map</button>
+      <button class="btn-visual flowchart" id="btnFlowchart" onclick="generateVisualization('flowchart')">📊 Generate Flowchart</button>
+      <button class="btn btn-secondary btn-sm" id="btnRegenerate" onclick="regenerateVisual()" style="display:none">🔄 Regenerate</button>
+      <button class="btn btn-secondary btn-sm" id="btnDownloadVisual" onclick="downloadVisual()" style="display:none">⬇ Download</button>
+      <button class="btn btn-secondary btn-sm" id="btnClearVisual" onclick="clearVisual()" style="display:none">✕ Clear</button>
+    </div>
+    <div id="visualLoader" class="loader hidden"><div class="spinner"></div><span id="visualLoaderText">Generating...</span></div>
+    <div class="visual-zoom-row" id="visualZoomRow" style="display:none">
+      <button class="btn-zoom" onclick="zoomVisual(0.2)">🔍+</button>
+      <span id="zoomPct" style="font-size:0.8rem;color:var(--text-muted)">100%</span>
+      <button class="btn-zoom" onclick="zoomVisual(-0.2)">🔍-</button>
+      <button class="btn-zoom" onclick="resetZoomVisual()">⊡</button>
+    </div>
+    <div class="visual-canvas-wrap" id="visualCanvasWrap">
+      <svg id="visualSVG" class="visual-svg"></svg>
+    </div>
+  </div>
+
+  <!-- PDF PROOFREADER — directly below PDF viewer -->
+  <div class="card feature-card">
+    <h3>🔎 PDF Proofreader</h3>
+    <p class="quiz-desc">AI scans your PDF for spelling, grammar, punctuation and content mistakes</p>
+    <div style="display:flex;gap:10px;flex-wrap:wrap">
+      <button class="btn btn-primary" id="btnProofread" onclick="proofreadPDF()">🔍 Check for Mistakes</button>
+      <button class="btn btn-secondary" id="btnClearProof" onclick="clearProofread()" style="display:none">✕ Clear</button>
+      <button class="btn btn-download" id="btnDownloadCorrected" onclick="downloadCorrectedPDF()" style="display:none">⬇ Download Corrected PDF</button>
+    </div>
+    <div id="proofreadLoader" class="loader hidden"><div class="spinner"></div><span>AI is scanning for mistakes...</span></div>
+    <div id="proofreadResults" class="proofread-results hidden"></div>
+  </div>
+
+  <!-- BELOW: ALL FEATURES -->
+  <div class="features-panel">
+
+    <!-- SMART READING -->
+    <div class="card feature-card" id="smartReadingCard">
+      <h3>🔊 Smart Reading</h3>
+      <p class="reading-hint">💡 Double-click any word to see its meaning</p>
+      <div class="font-controls">
+        <span style="font-size:0.8rem;color:var(--text-muted)">Font:</span>
+        <button class="btn-font" onclick="changeFontSize(2)">A+</button>
+        <button class="btn-font" onclick="changeFontSize(-2)">A-</button>
+        <span id="fontSizeLabel" style="font-size:0.78rem;color:var(--text-muted)">16px</span>
+      </div>
+      <div class="reading-text-box" id="readingTextBox">
+        <p class="placeholder-text">Upload a PDF to start smart reading...</p>
+      </div>
+      <div class="voice-controls">
+        <button class="btn btn-success" id="btnStart" onclick="startReading()">▶ Start</button>
+        <button class="btn btn-warning" id="btnPause" onclick="pauseReading()" disabled>⏸ Pause</button>
+        <button class="btn btn-danger" id="btnStop" onclick="stopReading()" disabled>⏹ Stop</button>
+        <select id="voiceSelect" class="voice-select"></select>
+        <label class="speed-label">Speed:
+          <input type="range" id="speedRange" min="0.5" max="2" step="0.1" value="1" />
+          <span id="speedVal">1x</span>
+        </label>
+      </div>
+    </div>
+
+    <!-- AI NOTES & TRANSLATION -->
+    <div class="card feature-card">
+      <h3>📝 AI Notes & Translation</h3>
+      <div class="row-controls">
+        <button class="btn btn-primary" id="btnNotes" onclick="generateNotes()">✨ Generate Notes</button>
+        <select id="langSelect" class="lang-select">
+          <option value="">-- Translate to --</option>
+          <option value="Kashmiri">Kashmiri</option>
+          <option value="Telugu">Telugu</option>
+          <option value="Hindi">Hindi</option>
+          <option value="Tamil">Tamil</option>
+          <option value="Kannada">Kannada</option>
+          <option value="Malayalam">Malayalam</option>
+          <option value="Bengali">Bengali</option>
+          <option value="Marathi">Marathi</option>
+          <option value="Gujarati">Gujarati</option>
+          <option value="Punjabi">Punjabi</option>
+          <option value="French">French</option>
+          <option value="Spanish">Spanish</option>
+          <option value="German">German</option>
+          <option value="Japanese">Japanese</option>
+          <option value="Chinese">Chinese</option>
+          <option value="Arabic">Arabic</option>
+        </select>
+        <button class="btn btn-secondary" onclick="translateText()">🌐 Translate</button>
+      </div>
+      <div id="notesLoader" class="loader hidden"><div class="spinner"></div><span>AI is generating notes...</span></div>
+      <div class="notes-output" id="notesOutput"></div>
+      <div id="translationOutput" class="translation-output hidden"></div>
+      <div id="translationClearRow" style="display:none;margin-top:8px">
+        <button class="btn btn-secondary btn-sm" onclick="clearTranslation()">✕ Clear Translation</button>
+      </div>
+      <div class="download-row" id="downloadRow" style="display:none">
+        <button class="btn btn-download" onclick="downloadNotesPDF()">⬇ Download Notes as PDF</button>
+        <button class="btn btn-save-lib" id="btnSaveNotes" onclick="saveNotesToLibrary()">💾 Save to Library</button>
+        <button class="btn btn-share" onclick="showShareModal()">📤 Share Notes</button>
+        <button class="btn btn-secondary" onclick="clearNotes()">✕ Clear Notes</button>
+      </div>
+    </div>
+
+    <!-- TOPIC SEARCH -->
+    <div class="card feature-card">
+      <h3>🔍 Topic Search in Notes</h3>
+      <div class="search-row">
+        <input type="text" id="topicSearchInput" class="input-field" placeholder="Enter topic or use 🎤 voice..." />
+        <button class="btn btn-primary" onclick="searchTopic()">Search</button>
+        <button class="btn btn-secondary" id="btnClearTopic" onclick="clearTopicSearch()" style="display:none">✕ Clear</button>
+      </div>
+      <div class="voice-control-bar" id="vcbTopic">
+        <button class="btn-mic" id="micTopic" onclick="startVoiceInput('topicSearchInput','micTopic',searchTopic,'vcbTopic')" title="Start voice">🎤 Speak</button>
+        <button class="btn-mic-stop hidden" id="micTopicStop" onclick="stopVoiceInput('micTopic','vcbTopic')" title="Stop">⏹ Stop</button>
+        <select class="voice-lang-select" id="langTopic">
+          <option value="en-US">English</option>
+          <option value="te-IN">Telugu</option>
+          <option value="hi-IN">Hindi</option>
+          <option value="ta-IN">Tamil</option>
+          <option value="kn-IN">Kannada</option>
+          <option value="ml-IN">Malayalam</option>
+        </select>
+        <span class="voice-status" id="vsTopic"></span>
+      </div>
+      <div id="topicSearchLoader" class="loader hidden"><div class="spinner"></div><span>Searching...</span></div>
+      <div id="topicSearchResult" class="search-result hidden"></div>
+    </div>
+
+    <!-- LEARN WITH VIDEO -->
+    <div class="card feature-card">
+      <h3>🎬 Learn with Video</h3>
+      <div class="search-row">
+        <input type="text" id="videoTopicInput" class="input-field" placeholder="Enter topic or use 🎤 voice..." />
+        <button class="btn btn-primary" onclick="searchVideos()">Search Videos</button>
+        <button class="btn btn-secondary" id="btnClearVideos" onclick="clearVideos()" style="display:none">✕ Clear</button>
+      </div>
+      <div class="voice-control-bar" id="vcbVideo">
+        <button class="btn-mic" id="micVideo" onclick="startVoiceInput('videoTopicInput','micVideo',searchVideos,'vcbVideo')" title="Start voice">🎤 Speak</button>
+        <button class="btn-mic-stop hidden" id="micVideoStop" onclick="stopVoiceInput('micVideo','vcbVideo')" title="Stop">⏹ Stop</button>
+        <select class="voice-lang-select" id="langVideo">
+          <option value="en-US">English</option>
+          <option value="te-IN">Telugu</option>
+          <option value="hi-IN">Hindi</option>
+          <option value="ta-IN">Tamil</option>
+          <option value="kn-IN">Kannada</option>
+          <option value="ml-IN">Malayalam</option>
+        </select>
+        <span class="voice-status" id="vsVideo"></span>
+      </div>
+      <div id="videoLoader" class="loader hidden"><div class="spinner"></div><span>Finding videos...</span></div>
+      <div id="videoGrid" class="video-grid"></div>
+    </div>
+
+    <!-- Q&A GENERATOR -->
+    <div class="card feature-card">
+      <h3>📋 Q&A Generator</h3>
+      <p class="quiz-desc">Generate exam-style questions and answers — 2 marks, 5 marks, 8 marks</p>
+      <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px">
+        <button class="btn btn-primary" onclick="generateQA(2)">📝 2 Marks Q&A</button>
+        <button class="btn btn-secondary" onclick="generateQA(5)">📄 5 Marks Q&A</button>
+        <button class="btn btn-secondary" onclick="generateQA(8)">📃 8 Marks Q&A</button>
+        <button class="btn btn-secondary" id="btnClearQA" onclick="clearQA()" style="display:none">✕ Clear</button>
+        <button class="btn btn-secondary" id="btnDlQA" onclick="downloadQA()" style="display:none">⬇ Download</button>
+      </div>
+      <div id="qaLoader" class="loader hidden"><div class="spinner"></div><span id="qaLoaderMsg">Generating Q&A...</span></div>
+      <div id="qaOutput" class="notes-output" style="display:none"></div>
+    </div>
+
+    <!-- AI QUIZ -->
+    <div class="card feature-card" id="quizSection">
+      <h3>🧪 AI Quiz</h3>
+      <div class="quiz-controls" id="quizControls">
+        <span class="quiz-desc">Generate MCQ questions from your PDF and test yourself</span>
+        <div class="quiz-setup-row">
+          <label class="quiz-count-label">Questions:
+            <select id="quizCount" class="lang-select">
+              <option value="5">5</option>
+              <option value="10" selected>10</option>
+              <option value="15">15</option>
+            </select>
+          </label>
+          <button class="btn btn-primary" id="btnGenerateQuiz" onclick="generateQuiz()">🧠 Generate Quiz</button>
+          <button class="btn btn-secondary" id="btnResetQuiz" onclick="resetQuiz()" style="display:none">✕ Reset</button>
+        </div>
+      </div>
+      <div id="quizLoader" class="loader hidden"><div class="spinner"></div><span>AI is creating your quiz...</span></div>
+      <div id="quizContainer" class="quiz-container hidden"></div>
+      <div id="quizResult" class="quiz-result hidden"></div>
+    </div>
+
+    <!-- RAG DEEP CHAT -->
+    <div class="card feature-card">
+      <h3>🔬 Deep PDF Chat <span class="rag-badge">RAG + Groq LLaMA3</span></h3>
+      <p class="quiz-desc">Searches the entire PDF (all pages) to find the most relevant answer — not just the first few pages</p>
+      <div id="ragMessages" class="chat-messages"></div>
+      <div class="chat-input-row">
+        <input type="text" id="ragInput" class="input-field" placeholder='Ask anything... searches ALL pages of your PDF' />
+        <button class="btn btn-primary" id="ragBtn" onclick="askRAG()">🔬 Ask</button>
+        <button class="btn btn-secondary btn-sm" id="btnResetRag" onclick="resetRAG()" style="display:none">✕ Clear</button>
+      </div>
+      <div id="ragInfo" class="rag-info hidden"></div>
+    </div>
+
+    <!-- AI EXPLANATION MODE -->
+    <div class="card feature-card">
+      <h3>🧠 AI Explanation Mode</h3>
+      <p class="quiz-desc">Get the PDF content explained in two different ways using AI</p>
+      <div class="explain-btn-row">
+        <button class="btn-explain easy" onclick="simplifyText('easy')">
+          🧒 Explain like I'm 10
+        </button>
+        <button class="btn-explain advanced" onclick="simplifyText('advanced')">
+          🎓 Make it Advanced
+        </button>
+        <button class="btn btn-secondary" id="btnResetExplain" onclick="resetExplain()" style="display:none">✕ Reset</button>
+      </div>
+      <div id="simplifyLoader" class="loader hidden"><div class="spinner"></div><span>AI is thinking...</span></div>
+      <div id="simplifyOutput" class="simplify-output hidden"></div>
+    </div>
+
+    <!-- STUDY ALARM -->
+    <div class="card feature-card">
+      <h3>⏰ Study Alarm</h3>
+      <p class="quiz-desc">Set an alarm to remind you to study — rings even when you're on another tab</p>
+      <div class="alarm-time-row">
+        <input type="time" id="alarmTime" class="alarm-time-input" />
+        <button class="btn btn-primary" onclick="setAlarm()">🔔 Set Alarm</button>
+        <button class="btn btn-secondary" id="btnCancelAlarm" onclick="cancelAlarm()" style="display:none">✕ Cancel</button>
+      </div>
+      <div id="alarmStatus" class="alarm-status hidden"></div>
+      <div id="alarmList" class="alarm-list"></div>
+    </div>
+
+    <!-- ASK FROM PDF CHATBOT -->
+      <p class="quiz-desc">Ask anything about this PDF — summaries, explanations, questions</p>
+      <div style="display:flex;justify-content:flex-end;margin-bottom:6px">
+        <button class="btn btn-secondary btn-sm" id="btnResetChat" onclick="resetChat()" style="display:none">✕ Clear Chat</button>
+      </div>
+      <div id="chatMessages" class="chat-messages"></div>
+      <div class="chat-input-row">
+        <input type="text" id="chatInput" class="input-field" placeholder='Ask something... e.g. "What is LLM?" or "Summarize page 1"' />
+        <button class="btn btn-primary" id="askBtn" onclick="askFromPDF()">Ask</button>
+      </div>
+    </div>
+
+  </div><!-- /features-panel -->
+</div><!-- /main-layout -->
+
+<!-- EXIT FOCUS MODE BUTTON -->
+<button id="btnExitFocus" class="btn-exit-focus hidden" onclick="toggleFocusMode()">❌ Exit Focus Mode</button>
+
+<!-- WORD LOOKUP SIDEBAR -->
+<div id="wordSidebar" class="word-sidebar">
+  <div class="sidebar-header">
+    <div class="sidebar-word-title">
+      <span id="sidebarWord" class="sidebar-word"></span>
+      <span id="sidebarPronunciation" class="sidebar-pronunciation"></span>
+      <button class="btn-speak-word" id="btnSpeakWord" title="Pronounce word">🔊</button>
+    </div>
+    <button class="sidebar-close" onclick="closeSidebar()">✕</button>
+  </div>
+  <div class="sidebar-body" id="sidebarBody">
+    <div class="sidebar-loader"><div class="spinner"></div><span>Looking up...</span></div>
+  </div>
+</div>
+<div id="sidebarOverlay" class="sidebar-overlay" onclick="closeSidebar()"></div>
+
+<!-- SHARE NOTES MODAL -->
+<div id="shareModal" class="share-modal hidden">
+  <div class="share-box">
+    <div class="share-header">
+      <h3>📤 Share Notes via Email</h3>
+      <button class="share-close" onclick="closeShareModal()">✕</button>
+    </div>
+    <div class="share-body">
+      <div class="form-group-share">
+        <label>Friend's Email</label>
+        <input type="email" id="shareEmail" placeholder="friend@email.com" />
+      </div>
+      <div class="form-group-share">
+        <label>Your Name (optional)</label>
+        <input type="text" id="shareName" placeholder="Your name" />
+      </div>
+      <div id="shareStatus" class="share-status hidden"></div>
+      <button class="btn-send-share" id="btnSendShare" onclick="sendNotesEmail()">📧 Send Notes</button>
+    </div>
+  </div>
+</div>
+<div class="share-overlay hidden" id="shareOverlay" onclick="closeShareModal()"></div>
+
+<!-- RESUME READING POPUP -->
+<div id="resumeModal" class="resume-modal hidden">
+  <div class="resume-box">
+    <div class="resume-icon">📖</div>
+    <h3 class="resume-title">Resume Reading?</h3>
+    <p class="resume-msg" id="resumeMsg">You were on page 7. Continue from where you left off?</p>
+    <div class="resume-btns">
+      <button class="btn-resume-yes" onclick="resumeReading()">▶ Resume</button>
+      <button class="btn-resume-no"  onclick="startOver()">↺ Start Over</button>
+    </div>
+  </div>
+</div>
+
+<!-- LOADING OVERLAY -->
+<div id="loadingOverlay" class="loading-overlay hidden">
+  <div class="loading-box">
+    <div class="big-spinner"></div>
+    <p id="loadingMsg">Processing PDF...</p>
+    <p class="loading-sub">This may take a moment for OCR processing</p>
+  </div>
+</div>
+
+<script src="app.js"></script>
+</body>
+</html>

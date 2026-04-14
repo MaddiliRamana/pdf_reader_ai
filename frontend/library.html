@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>My Library — Cognitive Curator</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🧠</text></svg>"/>
+  <style>
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+    :root{--primary:#6c63ff;--bg:#0f0f1a;--bg2:#1a1a2e;--card:#1e1e3a;--card2:#252545;--text:#e2e8f0;--muted:#94a3b8;--border:#2d2d5e;--danger:#ef4444;--success:#22c55e}
+    body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--bg);color:var(--text);min-height:100vh}
+    header{background:var(--bg2);padding:16px 32px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between}
+    .logo{font-size:1.3rem;font-weight:800;background:linear-gradient(135deg,#6c63ff,#a78bfa,#38bdf8);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+    .header-right{display:flex;align-items:center;gap:12px}
+    .user-name{color:#a78bfa;font-size:0.85rem;font-weight:600}
+    .btn{padding:8px 18px;border:none;border-radius:8px;cursor:pointer;font-size:0.85rem;font-weight:600;transition:all 0.2s;text-decoration:none;display:inline-flex;align-items:center;gap:6px}
+    .btn-primary{background:var(--primary);color:#fff}
+    .btn-primary:hover{background:#5a52d5}
+    .btn-danger{background:rgba(239,68,68,0.15);color:#f87171;border:1px solid rgba(239,68,68,0.4)}
+    .btn-danger:hover{background:rgba(239,68,68,0.3)}
+    .btn-sm{padding:5px 12px;font-size:0.78rem}
+    .btn-ghost{background:var(--card2);color:var(--text);border:1px solid var(--border)}
+    .btn-ghost:hover{background:var(--border)}
+    .container{max-width:1200px;margin:0 auto;padding:32px}
+    .tabs{display:flex;gap:0;background:var(--card);border:1px solid var(--border);border-radius:12px;padding:4px;margin-bottom:28px;width:fit-content}
+    .tab{padding:10px 28px;border-radius:8px;cursor:pointer;font-weight:600;font-size:0.9rem;color:var(--muted);transition:all 0.2s;border:none;background:none}
+    .tab.active{background:var(--primary);color:#fff}
+    .section{display:none}.section.active{display:block}
+    .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:16px}
+    .item-card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:18px;transition:all 0.2s;position:relative}
+    .item-card:hover{border-color:var(--primary);box-shadow:0 4px 20px rgba(108,99,255,0.2)}
+    .item-icon{font-size:2rem;margin-bottom:10px}
+    .item-name{font-size:0.95rem;font-weight:600;margin-bottom:4px;word-break:break-word}
+    .item-date{font-size:0.75rem;color:var(--muted);margin-bottom:12px}
+    .item-pdf-tag{font-size:0.72rem;color:#a78bfa;background:rgba(108,99,255,0.1);border:1px solid rgba(108,99,255,0.3);border-radius:4px;padding:2px 8px;display:inline-block;margin-bottom:10px}
+    .item-actions{display:flex;gap:8px;flex-wrap:wrap}
+    .empty{text-align:center;padding:60px 20px;color:var(--muted)}
+    .empty-icon{font-size:3rem;margin-bottom:12px}
+    .empty p{font-size:1rem;margin-bottom:16px}
+    .loader{display:flex;align-items:center;justify-content:center;gap:12px;padding:40px;color:var(--muted)}
+    .spinner{width:24px;height:24px;border:3px solid var(--border);border-top-color:var(--primary);border-radius:50%;animation:spin 0.8s linear infinite}
+    @keyframes spin{to{transform:rotate(360deg)}}
+    .toast{position:fixed;bottom:24px;right:24px;background:var(--card);border:1px solid var(--border);border-radius:10px;padding:12px 20px;font-size:0.88rem;box-shadow:0 4px 20px rgba(0,0,0,0.4);z-index:9999;transform:translateY(80px);opacity:0;transition:all 0.3s}
+    .toast.show{transform:translateY(0);opacity:1}
+    .toast.success{border-color:var(--success);color:#4ade80}
+    .toast.error{border-color:var(--danger);color:#f87171}
+    .modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:10000;display:none;align-items:center;justify-content:center;backdrop-filter:blur(4px)}
+    .modal-overlay.show{display:flex}
+    .modal{background:var(--card);border:1px solid var(--border);border-radius:16px;width:90%;max-width:700px;max-height:85vh;display:flex;flex-direction:column;box-shadow:0 8px 40px rgba(0,0,0,0.5)}
+    .modal-header{padding:20px 24px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center}
+    .modal-title{font-size:1.1rem;font-weight:700}
+    .modal-close{background:none;border:none;color:var(--muted);font-size:1.3rem;cursor:pointer}
+    .modal-body{padding:24px;overflow-y:auto;white-space:pre-wrap;font-size:0.9rem;line-height:1.7;flex:1}
+    .modal-footer{padding:16px 24px;border-top:1px solid var(--border);display:flex;gap:10px;justify-content:flex-end}
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="logo">🧠 Cognitive Curator — My Library</div>
+  <div class="header-right">
+    <span class="user-name" id="userName"></span>
+    <a href="/index.html" class="btn btn-ghost">← Back to App</a>
+    <button class="btn btn-danger btn-sm" onclick="logout()">Logout</button>
+  </div>
+</header>
+
+<div class="container">
+  <div class="tabs">
+    <button class="tab active" onclick="switchTab('pdfs')">📄 My PDFs</button>
+    <button class="tab" onclick="switchTab('notes')">📝 My Notes</button>
+  </div>
+
+  <!-- PDFs Section -->
+  <div class="section active" id="sec-pdfs">
+    <div id="pdfs-loader" class="loader"><div class="spinner"></div><span>Loading your PDFs...</span></div>
+    <div id="pdfs-grid" class="grid" style="display:none"></div>
+    <div id="pdfs-empty" class="empty" style="display:none">
+      <div class="empty-icon">📂</div>
+      <p>No PDFs saved yet.</p>
+      <a href="/index.html" class="btn btn-primary">Upload a PDF</a>
+    </div>
+  </div>
+
+  <!-- Notes Section -->
+  <div class="section" id="sec-notes">
+    <div id="notes-loader" class="loader"><div class="spinner"></div><span>Loading your notes...</span></div>
+    <div id="notes-grid" class="grid" style="display:none"></div>
+    <div id="notes-empty" class="empty" style="display:none">
+      <div class="empty-icon">📝</div>
+      <p>No notes saved yet. Generate AI notes from a PDF and save them.</p>
+      <a href="/index.html" class="btn btn-primary">Go to App</a>
+    </div>
+  </div>
+</div>
+
+<!-- Note Viewer Modal -->
+<div class="modal-overlay" id="noteModal">
+  <div class="modal">
+    <div class="modal-header">
+      <span class="modal-title" id="modalTitle"></span>
+      <button class="modal-close" onclick="closeModal()">✕</button>
+    </div>
+    <div class="modal-body" id="modalBody"></div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal()">Close</button>
+      <button class="btn btn-primary" id="modalDownload">⬇ Download PDF</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+  const BASE = 'http://localhost:3000';
+  const token = localStorage.getItem('cc_token');
+  const user  = localStorage.getItem('cc_user');
+  if (!token) window.location.href = '/login.html';
+  document.getElementById('userName').textContent = '👤 ' + (user || '');
+
+  function logout() { localStorage.clear(); window.location.href = '/login.html'; }
+
+  function switchTab(tab) {
+    document.querySelectorAll('.tab').forEach((t,i) => t.classList.toggle('active', ['pdfs','notes'][i] === tab));
+    document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+    document.getElementById('sec-' + tab).classList.add('active');
+  }
+
+  function showToast(msg, type='success') {
+    const t = document.getElementById('toast');
+    t.textContent = msg; t.className = 'toast show ' + type;
+    setTimeout(() => t.classList.remove('show'), 3000);
+  }
+
+  async function apiFetch(url, opts={}) {
+    opts.headers = { ...(opts.headers||{}), 'Authorization': 'Bearer ' + token };
+    const res = await fetch(BASE + url, opts);
+    return res.json();
+  }
+
+  // ── LOAD PDFs ──
+  async function loadPDFs() {
+    const data = await apiFetch('/api/library/pdfs');
+    document.getElementById('pdfs-loader').style.display = 'none';
+    const grid = document.getElementById('pdfs-grid');
+    const empty = document.getElementById('pdfs-empty');
+    if (!data.pdfs || data.pdfs.length === 0) { empty.style.display = 'block'; return; }
+    grid.style.display = 'grid';
+    grid.innerHTML = data.pdfs.map(p => `
+      <div class="item-card">
+        <div class="item-icon">📄</div>
+        <div class="item-name">${p.original_name}</div>
+        <div class="item-date">📅 ${new Date(p.uploaded_at).toLocaleDateString()}</div>
+        <div class="item-actions">
+          <button class="btn btn-primary btn-sm" onclick="openPDF(${p.id}, '${encodeURIComponent(p.original_name)}')">📖 Open</button>
+          <button class="btn btn-ghost btn-sm" onclick="loadPDFToApp(${p.id})">▶ Load in App</button>
+          <button class="btn btn-danger btn-sm" onclick="deletePDF(${p.id}, this)">🗑 Delete</button>
+        </div>
+      </div>`).join('');
+  }
+
+  function openPDF(id, name) {
+    window.open(`${BASE}/api/library/pdf/${id}?token=${token}`, '_blank');
+  }
+
+  async function loadPDFToApp(id) {
+    const data = await apiFetch(`/api/library/pdf/${id}/text`);
+    localStorage.setItem('cc_load_pdf_id', id);
+    localStorage.setItem('cc_load_pdf_text', data.text);
+    localStorage.setItem('cc_load_pdf_name', data.name);
+    window.location.href = '/index.html';
+  }
+
+  async function deletePDF(id, btn) {
+    if (!confirm('Delete this PDF and its notes?')) return;
+    const data = await apiFetch(`/api/library/pdf/${id}`, { method: 'DELETE' });
+    if (data.success) { btn.closest('.item-card').remove(); showToast('PDF deleted'); }
+    else showToast('Delete failed', 'error');
+  }
+
+  // ── LOAD NOTES ──
+  async function loadNotes() {
+    const data = await apiFetch('/api/library/notes');
+    document.getElementById('notes-loader').style.display = 'none';
+    const grid = document.getElementById('notes-grid');
+    const empty = document.getElementById('notes-empty');
+    if (!data.notes || data.notes.length === 0) { empty.style.display = 'block'; return; }
+    grid.style.display = 'grid';
+    grid.innerHTML = data.notes.map(n => `
+      <div class="item-card">
+        <div class="item-icon">📝</div>
+        <div class="item-name">${n.title}</div>
+        ${n.pdf_name ? `<div class="item-pdf-tag">📄 ${n.pdf_name}</div>` : ''}
+        <div class="item-date">📅 ${new Date(n.created_at).toLocaleDateString()}</div>
+        <div class="item-actions">
+          <button class="btn btn-primary btn-sm" onclick="viewNote(${n.id})">👁 View</button>
+          <button class="btn btn-danger btn-sm" onclick="deleteNote(${n.id}, this)">🗑 Delete</button>
+        </div>
+      </div>`).join('');
+  }
+
+  let currentNoteContent = '';
+  async function viewNote(id) {
+    const data = await apiFetch(`/api/library/note/${id}`);
+    document.getElementById('modalTitle').textContent = data.note.title;
+    document.getElementById('modalBody').textContent = data.note.content;
+    currentNoteContent = data.note.content;
+    document.getElementById('modalDownload').onclick = () => downloadNoteAsPDF(data.note.title, data.note.content);
+    document.getElementById('noteModal').classList.add('show');
+  }
+
+  function closeModal() { document.getElementById('noteModal').classList.remove('show'); }
+
+  function downloadNoteAsPDF(title, content) {
+    // Use jsPDF if available, else plain text download
+    const blob = new Blob([content], { type: 'text/plain' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = title.replace(/[^a-z0-9]/gi, '_') + '.txt';
+    a.click();
+    showToast('Notes downloaded!');
+  }
+
+  async function deleteNote(id, btn) {
+    if (!confirm('Delete this note?')) return;
+    const data = await apiFetch(`/api/library/note/${id}`, { method: 'DELETE' });
+    if (data.success) { btn.closest('.item-card').remove(); showToast('Note deleted'); }
+    else showToast('Delete failed', 'error');
+  }
+
+  // Load both on start
+  loadPDFs();
+  loadNotes();
+</script>
+</body>
+</html>
